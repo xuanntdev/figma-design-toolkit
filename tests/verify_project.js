@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { strictNode, markRemoved } = require('./tests/strict-node.js');
+const { strictNode, markRemoved } = require('./strict-node.js');
 
 let seq = 1;
 class MockNode {
@@ -32,7 +32,7 @@ class MockNode {
   get characters() { return this._chars; }
 }
 
-const installTokenApi = require('./tests/figma-token-mock')(MockNode);
+const installTokenApi = require('./figma-token-mock')(MockNode);
 
 function boot(bundlePath, fontsMissing) {
   const root = new MockNode('DOCUMENT');
@@ -151,7 +151,7 @@ async function run(bundle, fontsMissing) {
 }
 
 (async () => {
-  const bundle = path.resolve(process.argv[2] || path.join(__dirname, 'project/dist/code.js'));
+  const bundle = path.resolve(process.argv[2] || path.join(__dirname, '..', 'project/dist/code.js'));
   if (!fs.existsSync(bundle)) throw new Error('Không thấy ' + bundle + ' (chạy python design_sync.py build trước).');
   await run(bundle, false);
   await run(bundle, true);

@@ -1,41 +1,52 @@
 # Design Sync Toolkit cho Figma
 
-Bộ công cụ giúp dev, BA và trợ lý AI dựng màn hình chỉnh sửa được trên Figma Desktop **chỉ bằng một nút bấm**. Màn được viết bằng code, build thành plugin Figma chạy **cục bộ**: không server, không gọi ra internet; chỉ khi bật cầu nối thì plugin nói chuyện với `localhost` để gửi trạng thái Figma về repo. Yêu cầu: Git, Figma Desktop, Python 3.10+.
+Bộ công cụ cho BA, trợ lý AI và dev đọc thiết kế, dựng và sửa màn trong Figma Desktop. Plugin dùng cầu nối `localhost` của mỗi checkout. Yêu cầu Git, Figma Desktop và Python 3.10+.
 
 ## Cách hoạt động
 
 ```mermaid
 flowchart LR
-    Edit["Sửa màn trong project/"] --> Build["python design_sync.py build"]
-    Build --> Figma["Mở plugin của dự án trong Figma"]
-    Figma --> Click["Bấm Cập nhật → dựng vào Hiện tại / Cải tiến"]
-    Click -.-> Undo["Hoàn tác nếu cần"]
+    Figma["Mở plugin và kết nối file"] --> Read["AI đọc selection, màn và design system"]
+    Read --> Edit["Tạo màn hoặc sửa một màn trực tiếp"]
+    Read --> Bulk["Liệt kê lô sửa"]
+    Bulk --> Click["BA bấm Cập nhật"]
 ```
 
-- Mỗi team **clone kit thành repo của mình**; màn và cấu hình (tên plugin, cỡ khung, khung đích) nằm trong `project/` và được commit chung.
-- Plugin không ghi đè bản đã duyệt và phần designer tự chỉnh; tự nhận bố cục Section **Hiện tại / Cải tiến** có sẵn trong file Figma.
-- **Không áp đặt một cách làm.** Chọn trong `design-sync.json`: *sửa trực tiếp* trên khu Hiện tại (`target: "current"`, `layout: "sections"`, `sync: "merge"`…) hoặc *sinh màn mới / bản đề xuất* vào khu Cải tiến (`target: "improved"`, `layout: "grid"`, `sync: "replace"`), hoặc dùng cả hai. Cây Section chọn cấp, merge 3 chiều + Xem trước, nhãn màn, tự dọn khu thừa, trang Token & Component đều **tuỳ chọn**, mặc định tắt: xem [workflow.md](docs/workflow.md).
-- Màn dựng ra là **instance của component dùng chung + biến token**; extension chỉ khai luật khớp (`linkRules`, `linkTokens`), engine ở lõi lo phần còn lại và báo độ phủ: xem [workflow.md](docs/workflow.md) mục 5.
-- Chiều ngược, **chỉ đọc**: plugin đọc file Figma và đưa vào `project/figma-state/` để AI biết designer đã sửa gì (`python design_sync.py pull`, `figma-diff`); cầu nối localhost bật sẵn cho dự án mới, `"bridge": null` để plugin hoàn toàn offline, xem [workflow.md](docs/workflow.md) mục 6.
-- Dự án lớn: dữ liệu snapshot theo nhóm (`snapshot-dir`), build theo nhóm; web có sẵn thì chụp thành snapshot bằng `capture/` (tuỳ chọn).
+- Thiết kế đã lưu trong Figma là đầu vào cho yêu cầu tiếp theo. `pull` lưu bản đọc theo file đã ghép vào `project/figma-state/`.
+- AI có thể thao tác trên page hoặc Section đang dùng và tái sử dụng component/style/token sẵn có. Page bị cấm ghi vẫn đọc được.
+- Dự án dùng builder có thể giữ quy trình Hiện tại / Cải tiến, các preset lưới/Section và diff theo màn. `"bridge": null` giữ plugin ở chế độ offline. [Cấu hình builder](docs/workflow.md)
 
 ## Bắt đầu nhanh
 
 ```sh
 git clone https://github.com/xuanntdev/figma-design-toolkit.git my-app-design
 cd my-app-design
-python design_sync.py init --name "Tên dự án"
+python design_sync.py init --name "Tên dự án" --empty
 python design_sync.py build
+python design_sync.py doctor
 ```
 
-Trong Figma Desktop: **Plugins → Development → Import plugin from manifest…** → `project/dist/manifest.json`, mở plugin rồi bấm **Cập nhật**.
+Trong Figma Desktop, chọn **Plugins → Development → Import plugin from manifest…** và mở `project/dist/manifest.json`. Mở plugin ở đúng file thiết kế rồi bấm **Kết nối file**. Trợ lý AI tìm luồng qua [AGENTS.md](AGENTS.md).
 
 Đưa lên repo của team, bảng cấu hình và bảng lệnh: xem [docs/setup.md](docs/setup.md).
+
+## Cấu trúc repo
+
+| Đường dẫn | Nội dung |
+| --- | --- |
+| `design_sync.py` | CLI cho setup, build và làm việc với Figma |
+| `kit_core/` | Mã plugin, bridge, cấu hình và đọc thiết kế |
+| `docs/` | Hướng dẫn cài đặt, tích hợp và sử dụng |
+| `tests/`, `verify_release.py` | Ca kiểm và lệnh chạy toàn bộ |
+| `example/`, `capture/` | Màn mẫu và công cụ nhập ảnh tham chiếu tùy chọn |
+
+Repo đã có sẵn có thể lấy toolkit về làm dependency cục bộ. Cấu hình và extension nằm trong repo dự án. [Hướng dẫn tích hợp](docs/setup.md#dùng-toolkit-từ-một-repo-dự-án-có-sẵn)
 
 ## Tài liệu
 
 - [**Nguyên tắc thiết kế khi sinh màn** (component dùng chung là bắt buộc, token chuẩn Figma…)](docs/nguyen-tac.md)
 - [Cài đặt, làm việc nhóm & cấu hình dự án](docs/setup.md)
+- [CLI tạo màn, sửa selection và cập nhật hàng loạt](docs/figma-live.md)
 - [Hai cách dùng điển hình, Hiện tại / Cải tiến & bảo vệ bản duyệt](docs/workflow.md)
 - [Mẫu prompt cho AI (Cursor / Claude / Codex / AGY)](docs/ai-prompts.md)
 - [Chụp web thành snapshot bằng Playwright (`capture/`, tuỳ chọn)](docs/capture.md)

@@ -41,7 +41,7 @@ Sau `init`, thay màn mẫu bằng bộ dựng snapshot có sẵn: `rm project/e
 node capture/gen-plan.mjs            # project/snapshots/*/group.json → project/extension/data/<nhóm>.gen.json + project/draft-plan.json
 python design_sync.py build          # code.js nhúng snapshot các nhóm có trong data/
 python design_sync.py check
-node verify_project.js               # chạy plugin trong Figma giả: dựng hết màn trong plan, thiếu font cũng không vỡ
+node tests/verify_project.js         # chạy plugin trong Figma giả: dựng hết màn trong plan, thiếu font cũng không vỡ
 ```
 
 - **Build theo nhóm**: `node capture/gen-plan.mjs --groups a,b` chỉ nhúng nhóm chọn (bundle nhẹ); nhóm khác trên Figma không bị đụng. Chạy lại không `--groups` trước khi commit `data/` + `draft-plan.json`.

@@ -25,7 +25,6 @@ function pvFrames(run, t, index) {
     parent = pvSectionParent(run, t);
   }
   if (!parent) return [];
-  stAdoptLegacy(parent, t.screen.id, t.theme); // chỉ gắn lại tag cho khung bản cũ mất tag, đúng như lúc Cập nhật
   return parent.children.filter((n) => n.type === 'FRAME' && stSameCell(n, t.screen.id, t.theme));
 }
 

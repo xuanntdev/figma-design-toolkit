@@ -3,6 +3,7 @@
 /captures/
 /test-state/
 /project/dist/
+/project/.bridge-key
 __pycache__/
 *.py[cod]
 .venv/

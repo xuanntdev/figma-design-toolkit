@@ -64,7 +64,11 @@ def validate(cfg: dict, source: Path) -> dict:
     if cfg.get("improved") is False and cfg.get("target", "improved") != "current":
         raise ValueError(f"{source}: improved=false (không có khu Cải tiến) thì target phải là current.")
     settings.validate_options(cfg, source)
-    bridge_port(cfg, source)
+    port = bridge_port(cfg, source)
+    if not isinstance(cfg.get("readOnly", False), bool):
+        raise ValueError(f'{source}: readOnly phải là true hoặc false.')
+    if cfg.get("readOnly") and not port:
+        raise ValueError(f'{source}: readOnly cần bật bridge.')
     unknown = set(cfg.get("labels") or {}) - set(LABEL_KEYS)
     if unknown:
         raise ValueError(f"{source}: labels không hỗ trợ {sorted(unknown)}. Chỉ nhận {list(LABEL_KEYS)}.")
@@ -111,4 +115,6 @@ def runtime(cfg: dict) -> dict:
     port = bridge_port(cfg)
     if port:
         out["bridge"] = {"port": port}
+    if cfg.get("readOnly"):
+        out["readOnly"] = True
     return out

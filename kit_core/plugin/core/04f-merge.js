@@ -72,6 +72,7 @@ function mgLabelFresh(parent, frame, info) {
 
 function mgBuild(parent, t, o, plan, out) {
   const id = t.screen.id;
+  const replacedIds = plan.drafts.map((n) => n.id);
   plan.drafts.forEach((n) => {
     stDropLabels(parent, n);
     n.remove();
@@ -82,7 +83,7 @@ function mgBuild(parent, t, o, plan, out) {
   stTag(frame, Object.assign({ screenId: id, theme: t.theme, source: 'ai', status: 'draft', variant: plan.prot.length, batchId: o.batchId }, o.tags || {}));
   if (o.info) stSetScreenLabel(parent, frame, o.info);
   if (plan.action === 'conflict') stMarkConflict(parent, plan.base, frame);
-  return Object.assign(out, { frameId: frame.id, reused: false, replaced: plan.drafts.length });
+  return Object.assign(out, { frameId: frame.id, reused: false, replaced: plan.drafts.length, replacedIds });
 }
 
 // Không dựng lại: giữ khung (bản nháp nguyên bản, bản sửa tay, hoặc cặp xung đột đã có), dọn dấu xung đột đã hết hiệu lực.

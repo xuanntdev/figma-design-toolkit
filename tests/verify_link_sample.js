@@ -3,7 +3,7 @@
 // Chạy: node verify_link_sample.js example <code.js dựng từ capture/extension + capture/link-example + tests/link-sample>
 //       node verify_link_sample.js bare <code.js dựng từ capture/extension + tests/link-sample>   (không khai luật: dựng như cũ, không instance)
 const assert = require('node:assert/strict');
-const { boot, all, framesOf } = require('./tests/link-env.js');
+const { boot, all, framesOf } = require('./link-env.js');
 
 const ARGS = { screenIds: ['sample-danh-sach', 'sample-chi-tiet'], themes: ['light'], target: 'current' };
 const plain = (v) => JSON.parse(JSON.stringify(v));

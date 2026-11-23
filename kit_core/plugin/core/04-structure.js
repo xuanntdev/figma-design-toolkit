@@ -88,9 +88,10 @@ function stFindPage(name) {
   return installed ? pages.find((candidate) => candidate.name === legacyName) : undefined;
 }
 
-async function stEnsurePage(name) {
+async function stEnsurePage(name, willWrite = true) {
   await figma.loadAllPagesAsync();
   const page = stFindPage(name) || figma.createPage();
+  if (willWrite || page.name !== name) liveAssertPage(page);
   if (page.name !== name) page.name = name;
   return page;
 }
@@ -211,7 +212,8 @@ async function stSetup(args) {
   const o = stOpts(args);
   await stEnsureFonts();
   const features = await stEnsurePage(o.pageFeatures);
-  const tokens = await stEnsurePage(o.pageTokens);
+  const tokens = await stEnsurePage(o.pageTokens, false);
+  if (liveProtected().has(figma.currentPage.id)) await figma.setCurrentPageAsync(features);
   // layout=sections draws "Hiện tại" as a Section tree, so there is no current container to keep on the grid.
   const current = stLayoutTree() ? null : stEnsureContainer(features, 'current', o.currentName);
   const improved = stImprovedOn() ? stEnsureContainer(features, 'improved', o.improvedName) : null;

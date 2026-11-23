@@ -8,6 +8,7 @@ let ST_PREPARED = false;
 // The link engine (07k..07o) reloads its component library every run; opts.readOnly (preview) never builds anything.
 async function stPrepare(opts) {
   if (typeof lkPrepare === 'function') await lkPrepare(opts);
+  if (opts?.readOnly) return;
   if (ST_PREPARED) return;
   const ext = stExtension();
   if (ext.prepare) await ext.prepare();
@@ -32,9 +33,11 @@ function stSameCell(node, id, theme) {
   return stTagOf(node, 'screenId') === id && (stTagOf(node, 'theme') || 'light') === theme;
 }
 
-function stIsProtected(node) {
-  // Giữ bản đã chọn / vẽ tay; chế độ sync=merge còn giữ cả khung `ai` mà designer đã sửa tay (so vân tay).
-  return stTagOf(node, 'status') === 'chosen' || stTagOf(node, 'source') === 'human' || (stSyncMerge() && stIsEdited(node));
+function stIsProtected(node, keepUnknown = true) {
+  if (stTagOf(node, 'status') === 'chosen' || stTagOf(node, 'source') === 'human') return true;
+  if (node.type !== 'FRAME' || stTagOf(node, 'source') !== 'ai') return false;
+  const fp = stTagOf(node, 'fp');
+  return fp ? fp !== stFingerprint(node) : keepUnknown !== false;
 }
 
 // Removes the unprotected ai nodes of this cell; returns how many were replaced and how many were kept.

@@ -43,8 +43,13 @@ async function cmdExportPng(args) {
   const nodes = await resolveNodes(args);
   if (nodes.length !== 1) throw new Error('Hãy chọn đúng một khung hoặc truyền nodeId khi xuất PNG.');
   const node = nodes[0];
-  const scale = args.scale || 1;
+  const scale = args.scale ?? 1;
+  if (!livePage(node) || node.type === 'PAGE' || typeof node.exportAsync !== 'function') {
+    throw new Error('Đích xuất PNG phải là một layer trên canvas.');
+  }
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Scale xuất PNG phải là số dương.');
   const bytes = await node.exportAsync({ format: 'PNG', constraint: { type: 'SCALE', value: scale } });
+  if (bytes.length > 45 * 1024 * 1024) throw new Error('Ảnh quá lớn cho cầu nối. Giảm scale hoặc chọn một frame nhỏ hơn.');
   return {
     nodeId: node.id, name: node.name, width: node.width, height: node.height,
     scale, base64: figma.base64Encode(bytes),

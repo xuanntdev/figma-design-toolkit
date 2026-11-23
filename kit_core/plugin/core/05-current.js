@@ -63,6 +63,8 @@ function stWriteCell(container, cells, item, app) {
 async function cmdCurrentApply(args) {
   assertCanWrite();
   const container = await stRequireContainer(args, 'current');
+  liveAssertPage(container);
+  if (liveProtected().has(figma.currentPage.id)) await figma.setCurrentPageAsync(livePage(container));
   const cells = stCurrentCells(container);
   for (const item of args.items || []) stWriteCell(container, cells, item, args.app);
   for (const r of args.removed || []) {

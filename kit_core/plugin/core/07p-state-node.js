@@ -72,7 +72,10 @@ function rsLayout(node, out) {
 function rsText(node, ctx, out) {
   if (node.type !== 'TEXT') return;
   out.chars = node.characters;
-  if (node.fontName && !isMixed(node.fontName)) out.font = node.fontName.family + ' ' + node.fontName.style;
+  if (node.fontName && !isMixed(node.fontName)) {
+    out.font = node.fontName.family + ' ' + node.fontName.style;
+    out.fontName = node.fontName;
+  }
   if (typeof node.fontSize === 'number') out.size = node.fontSize;
   const style = typeof node.textStyleId === 'string' ? ctx.styles.get(node.textStyleId) : '';
   if (style) out.style = style;
@@ -112,8 +115,10 @@ async function rsInstanceHead(node, ctx, out, withMain) {
   const main = withMain ? await rsMain(node) : null;
   if (main) {
     out.main = main.name;
+    out.componentId = main.id;
     if (main.parent && main.parent.type === 'COMPONENT_SET') out.set = main.parent.name;
   }
+  if (withMain && node.componentProperties) out.componentProperties = node.componentProperties;
   const p = await rsProps(node.componentProperties, ctx);
   if (Object.keys(p.variant).length) out.variant = p.variant;
   if (Object.keys(p.props).length) out.props = p.props;
@@ -138,7 +143,10 @@ async function rsInstance(node, ctx, out) {
 
 async function rsNode(node, ctx, depth) {
   ctx.budget.left -= 1;
-  const out = Object.assign({ t: node.type, n: node.name }, rsGeom(node));
+  const out = Object.assign({ id: node.id, t: node.type, n: node.name }, rsGeom(node));
+  for (const key of ['textStyleId', 'fillStyleId', 'strokeStyleId', 'effectStyleId']) {
+    if (typeof node[key] === 'string' && node[key]) out[key] = node[key];
+  }
   rsLook(node, ctx, out);
   rsLayout(node, out);
   rsText(node, ctx, out);
@@ -153,6 +161,12 @@ async function rsNode(node, ctx, depth) {
     return out;
   }
   out.c = [];
-  for (const k of kids) out.c.push(await rsNode(k, ctx, depth - 1));
+  for (const k of kids) {
+    if (ctx.budget.left <= 0) {
+      out.truncated = kids.length - out.c.length;
+      break;
+    }
+    out.c.push(await rsNode(k, ctx, depth - 1));
+  }
   return out;
 }

@@ -137,6 +137,7 @@ async function cmdResolveConflict(args) {
   if (args.choice !== 'mine' && args.choice !== 'theirs') throw new Error('choice chỉ nhận mine hoặc theirs.');
   if (args.choice === 'theirs' && args.confirm !== true) throw new Error('Lấy bản mới sẽ xoá bản sửa tay: cần xác nhận rõ ràng.');
   const { h, d } = await cfPair(args);
+  liveAssertPages(h, d);
   const screenId = stTagOf(h, 'screenId');
   if (args.choice === 'mine') cfKeepMine(h, d);
   else cfTakeNew(h, d);

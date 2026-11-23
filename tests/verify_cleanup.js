@@ -5,8 +5,8 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { strictNode, markRemoved } = require('./tests/strict-node.js');
-const U = require('./tests/tree-util.js');
+const { strictNode, markRemoved } = require('./strict-node.js');
+const U = require('./tree-util.js');
 
 let seq = 1;
 class MockNode {

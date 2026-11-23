@@ -118,6 +118,7 @@ async function lkHealLibrary() {
   try {
     assertCanWrite();
     const page = await stEnsurePage(stOpts().pageTokens);
+    if (liveProtected().has(figma.currentPage.id)) await figma.setCurrentPageAsync(page);
     await ext.buildTokens(page);
     stampFile();
     figma.commitUndo();

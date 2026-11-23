@@ -129,17 +129,24 @@ def build(
         if not ext.is_dir():
             raise ValueError(f"Không tìm thấy thư mục extension {ext}.")
     version = version or (PLUGIN_DIR / "VERSION").read_text(encoding="utf-8").strip()
-    out_dir.mkdir(parents=True, exist_ok=True)
     runtime = dict(runtime or {})
     if name:
         runtime["name"] = name
-    text = bundle_text(extensions, version, plan=plan, runtime=runtime)
-    (out_dir / "code.js").write_text(text, encoding="utf-8", newline="\n")
-    ui_file = ui_path or (PLUGIN_DIR / "ui.html")
     port = (runtime.get("bridge") or {}).get("port")
-    ui = _INCLUDE.sub(lambda m: include_ui(ui_file.parent / m.group(1), port), ui_file.read_text(encoding="utf-8"))
+    bridge_key = dict(runtime.get("bridge") or {}).pop("key", "")
+    if port and bridge_key:
+        runtime["bridge"] = {"port": port}
+    read_only = runtime.get("readOnly") is True
+    if read_only and not port:
+        raise ValueError("Chế độ kiểm kê cần bật bridge.")
+    ui_file = ui_path or (PLUGIN_DIR / "ui.html")
+    ui = _INCLUDE.sub(lambda m: include_ui(ui_file.parent / m.group(1), port, read_only, bridge_key), ui_file.read_text(encoding="utf-8"))
+    ui = ui.replace("__UI_MODE__", "read" if read_only else "design")
     if name:
         ui = ui.replace(f"<h1>{DEFAULT_UI_TITLE}</h1>", f"<h1>{html.escape(name)}</h1>")
+    text = bundle_text(extensions, version, plan=plan, runtime=runtime)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "code.js").write_text(text, encoding="utf-8", newline="\n")
     (out_dir / "ui.html").write_text(ui, encoding="utf-8", newline="\n")
     manifest = json.loads((PLUGIN_DIR / "manifest.json").read_text(encoding="utf-8"))
     manifest["networkAccess"] = network_access(port)
@@ -151,8 +158,13 @@ def build(
     return {"out": str(out_dir), "version": version, "bytes": len(text.encode("utf-8")), "modules": len(module_files(extensions))}
 
 
-def include_ui(path: Path, port: int | None) -> str:
+def include_ui(path: Path, port: int | None, read_only: bool = False, bridge_key: str = "") -> str:
+    if read_only and path.name == "ui-sync.html":
+        return ""
     if path.name == BRIDGE_UI:
+        if port and bridge_key:
+            return (path.with_name("ui-live.html").read_text(encoding="utf-8")
+                    .replace("__BRIDGE_PORT__", str(port)).replace("__BRIDGE_KEY__", bridge_key))
         return path.read_text(encoding="utf-8").replace("__BRIDGE_PORT__", str(port)) if port else ""
     return path.read_text(encoding="utf-8")
 
