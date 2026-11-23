@@ -1,10 +1,12 @@
-// Cây Section lồng nhau của khu "Hiện tại" (target=current): Section khu (vd KHU A / KHU B, lấy từ groupOrders[nhóm].area) → Section nhóm (title nhóm)
-// → Section luồng (title luồng viết hoa) → khung màn. Tên Section Figma hiển thị cỡ cố định ở mọi mức zoom nên dùng làm
-// nhãn chính; nhãn text trên khung (04c) là nhãn phụ khi zoom gần. Section do plugin tạo mang tag treeLevel/treeKey.
+// Cây Section lồng nhau của khu "Hiện tại" (layout=sections, target=current): các cấp lấy từ design-sync.json `sectionLevels`
+// (mặc định khu → nhóm → luồng, bỏ được cấp nào cũng được): Section khu (vd KHU A / KHU B, từ groupOrders[nhóm].area) → Section nhóm
+// (title nhóm) → Section luồng (title luồng viết hoa) → khung màn. Khung nằm ở cấp cuối. Nhóm chỉ có một luồng thì cấp luồng gộp vào
+// nhóm (`collapseSingleFlow`). Tên Section Figma hiển thị cỡ cố định ở mọi mức zoom nên dùng làm nhãn chính; nhãn text trên khung
+// (04c, tuỳ chọn `screenLabels`) là nhãn phụ khi zoom gần. Section do plugin tạo mang tag treeLevel/treeKey.
 // Nguồn meta: nhóm (order/title/area/flows) = extension + DRAFT_PLAN.groupOrders; luồng của màn = DRAFT_PLAN.screenFlows.
 
 const TREE = {
-  fills: { area: null, group: '#DCEAFB', flow: '#EEF5FE' }, // khu trong suốt (null); nhóm > luồng xanh nhạt
+  fills: stTreeFills(), // mặc định khu trong suốt (null), nhóm/luồng xanh nhạt; đổi bằng design-sync.json `sectionFills`
   head: { root: 140, area: 140, group: 120, flow: 100 }, // chừa chỗ phía trên cho tên Section
   pad: 60, gap: 80, gapX: 56,
   flowCols: 2, // luồng đầy đủ perRow khung đứng tối đa mấy cột cạnh nhau trong một nhóm (1 = xếp dọc hết, nhóm lớn sẽ rất dài)
@@ -83,12 +85,40 @@ function trSection(parent, level, key, name, order) {
   return sec;
 }
 
-// Section luồng của một màn (tạo đủ khu → nhóm → luồng dưới `root`); trả { flow, info } hoặc null khi không biết nhóm.
-function trFlowSection(root, gid, stem, groupNode) {
+// Số luồng khác nhau của mỗi nhóm: từ mọi màn của nhóm nhúng, mọi khung của plugin đang có và các ô của lô (cùng đáp số mỗi lượt).
+function trFlowCounts(items, targets) {
+  const sets = new Map();
+  const add = (gid, stem) => {
+    if (!sets.has(gid)) sets.set(gid, new Set());
+    sets.get(gid).add(trFlowOf(stem).id);
+  };
+  for (const g of stGroups()) g.screens.forEach((s) => add(g.id, s.stem || s.id));
+  for (const { frame, parent } of items) add(trGroupIdOf(frame, parent), stTagOf(frame, 'screenId'));
+  for (const t of targets) add(t.group.id, t.screen.id);
+  return new Map([...sets].map(([gid, set]) => [gid, set.size]));
+}
+
+// Có gộp cấp luồng vào nhóm không: bật `collapseSingleFlow`, cây có cấp nhóm và nhóm chỉ có một luồng.
+function trCollapsed(gid, counts) {
+  return stSetting('collapseSingleFlow', true) !== false && stTreeLevels().includes('group') && !!counts && counts.get(gid) <= 1;
+}
+
+// Section lá của một màn (tạo đủ các cấp của cây dưới `root`); trả { flow, info } hoặc null khi không biết nhóm.
+function trFlowSection(root, gid, stem, groupNode, counts) {
   if (!gid) return null;
   const g = trGroupInfo(gid, groupNode);
   const f = trFlowOf(stem);
-  const area = trSection(root, 'area', g.area, g.area, trAreaOrder(g.area));
-  const group = trSection(area, 'group', gid, g.title, g.order);
-  return { flow: trSection(group, 'flow', gid + '/' + f.id, f.title, f.order), info: g };
+  let sec = root;
+  for (const level of stTreeLevels()) {
+    if (level === 'area') sec = trSection(sec, 'area', g.area, g.area, trAreaOrder(g.area));
+    else if (level === 'group') sec = trSection(sec, 'group', gid, g.title, g.order);
+    else if (!trCollapsed(gid, counts)) sec = trSection(sec, 'flow', gid + '/' + f.id, f.title, f.order);
+  }
+  return { flow: sec, info: g };
+}
+
+// Mép phải của cây Section trên trang (0 khi chưa có): chỗ đặt khung Cải tiến cạnh cây Hiện tại.
+function stTreeRight(page) {
+  const mine = page.children.filter((n) => n.type === 'SECTION' && !!stTagOf(n, 'treeLevel'));
+  return mine.length ? Math.max(...mine.map((n) => n.x + n.width)) + ST_GRID.containerGap : 0;
 }

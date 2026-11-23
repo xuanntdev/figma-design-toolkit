@@ -1,9 +1,10 @@
-// Bố cục cây Section "Hiện tại", dựng lại mỗi lượt cho MỌI Section của plugin (kể cả nhóm ngoài lô build), từ trong ra ngoài:
+// Bố cục cây Section "Hiện tại" (các cấp theo `sectionLevels`), dựng lại mỗi lượt cho MỌI Section của plugin (kể cả nhóm ngoài lô build),
+// từ trong ra ngoài (Section lá giữ khung màn; Section còn Section con thì xếp con, chồng/kệ tuỳ cấp con):
 //  - luồng: khung màn xếp lưới `perRow` cột, hàng cao bằng khung cao nhất (+ chỗ cho nhãn); các khung cùng một màn (bản sửa tay
 //    + bản mới / cặp xung đột) luôn nằm cạnh nhau trong cùng hàng; node lạ của designer giữ chỗ, lưới bắt đầu bên dưới chúng;
-//  - nhóm: các luồng theo order luồng, xếp "kệ" trái→phải rồi xuống hàng khi hết bề rộng TREE.flowCols luồng đầy đủ perRow khung
-//    (luồng ngắn đứng cạnh nhau, nhóm 70+ màn rộng 2 cột nên không dài một chiều); khu: nhóm theo order, xếp dọc;
-//    gốc: khu theo order nhỏ nhất của khu.
+//  - Section cha của các luồng: luồng theo order luồng, xếp "kệ" trái→phải rồi xuống hàng khi hết bề rộng TREE.flowCols luồng đầy
+//    đủ perRow khung (luồng ngắn đứng cạnh nhau, nhóm 70+ màn rộng 2 cột nên không dài một chiều); cha của khu/nhóm: xếp dọc theo order;
+//    gốc: các Section cấp đầu xếp dọc theo order.
 // Section của plugin ôm sát nội dung (co và giãn theo + padding); Section gốc "Hiện tại" của designer chỉ giãn.
 
 function trOverlap(a, b) {
@@ -89,7 +90,7 @@ function trRows(units) {
 function trReflowFlow(sec) {
   const grid = sec.children.filter(trGridFrame);
   const foreign = sec.children.filter((n) => !trGridFrame(n) && stTagOf(n, 'role') !== 'screenLabel');
-  let y = foreign.length ? trBottom(foreign) + ST_GRID.gapY : TREE.head.flow;
+  let y = foreign.length ? trBottom(foreign) + ST_GRID.gapY : (TREE.head[stTagOf(sec, 'treeLevel')] || TREE.head.flow);
   for (const row of trRows(trUnits(sec, grid))) {
     const frames = row.flatMap((u) => u.frames);
     const room = Math.max(...frames.map((f) => (stLabelsOf(sec, f).length ? ST_GRID.labelH : 0)));
@@ -111,10 +112,10 @@ function trRowWidth() {
   return TREE.flowCols * full + (TREE.flowCols - 1) * TREE.gap;
 }
 
-function trPackGroup(group) {
-  const flows = trSorted(group.children.filter(trIsTree));
-  const foreign = group.children.filter((n) => !trIsTree(n));
-  let y = foreign.length ? trBottom(foreign) + TREE.gap : TREE.head.group;
+function trPackFlows(sec) {
+  const flows = trSorted(sec.children.filter(trIsTree));
+  const foreign = sec.children.filter((n) => !trIsTree(n));
+  let y = foreign.length ? trBottom(foreign) + TREE.gap : TREE.head[stTagOf(sec, 'treeLevel')];
   let x = TREE.pad;
   let rowH = 0;
   for (const f of flows) {
@@ -128,7 +129,7 @@ function trPackGroup(group) {
     x += f.width + TREE.gap;
     rowH = Math.max(rowH, f.height);
   }
-  trFit(group, true);
+  trFit(sec, true);
 }
 
 // Xếp dọc các Section cây của `parent` theo thứ tự; node lạ giữ chỗ, Section bị đẩy xuống khi trùng.
@@ -148,25 +149,30 @@ function trStack(parent, anchor) {
   }
 }
 
-function trLayoutArea(area) {
-  trStack(area, { x: TREE.pad, y: TREE.head.area });
-  trFit(area, true);
+// Section có Section con thì xếp con (luồng → kệ, cấp khác → chồng dọc) rồi ôm sát; Section lá thì xếp lưới khung màn.
+function trLayoutSection(sec) {
+  const kids = sec.children.filter(trIsTree);
+  if (!kids.length) {
+    trReflowFlow(sec);
+    return;
+  }
+  kids.forEach(trLayoutSection);
+  if (stTagOf(kids[0], 'treeLevel') === 'flow') {
+    trPackFlows(sec);
+    return;
+  }
+  trStack(sec, { x: TREE.pad, y: TREE.head[stTagOf(sec, 'treeLevel')] });
+  trFit(sec, true);
 }
 
-// Toàn cây dưới root. Root là Section "Hiện tại" (con ở x=pad, y=head) hoặc trang (neo = khu đầu tiên đang có / vị trí vỏ cũ).
+// Toàn cây dưới root. Root là Section "Hiện tại" (con ở x=pad, y=head) hoặc trang (neo = Section đầu tiên đang có / vị trí vỏ cũ).
 function trLayout(root, anchor) {
-  for (const area of root.children.filter(trIsTree)) {
-    for (const group of area.children.filter(trIsTree)) {
-      group.children.filter(trIsTree).forEach(trReflowFlow);
-      trPackGroup(group);
-    }
-    trLayoutArea(area);
-  }
+  root.children.filter(trIsTree).forEach(trLayoutSection);
   trStack(root, root.type === 'SECTION' ? { x: TREE.pad, y: TREE.head.root } : anchor);
   if (root.type === 'SECTION') trFit(root, false);
 }
 
-// Neo của khu đầu tiên khi gốc là trang: khu đang có (nhỏ nhất), không thì vỏ cũ (container/Section), không thì (0, 0).
+// Neo của Section đầu tiên khi gốc là trang: Section đang có (nhỏ nhất), không thì vỏ cũ (container/Section), không thì (0, 0).
 function trAnchor(root) {
   const mine = root.children.filter(trIsTree);
   const pool = mine.length ? mine : root.children.filter((n) => trIsContainer(n) || trIsOldSection(n));
