@@ -1,6 +1,6 @@
 # Design Sync Toolkit cho Figma
 
-Bộ công cụ giúp dev, BA và trợ lý AI dựng màn hình chỉnh sửa được trên Figma Desktop **chỉ bằng một nút bấm**. Màn được viết bằng code, build thành plugin Figma chạy **cục bộ 100%** (không server, không mạng). Yêu cầu: Git, Figma Desktop, Python 3.10+.
+Bộ công cụ giúp dev, BA và trợ lý AI dựng màn hình chỉnh sửa được trên Figma Desktop **chỉ bằng một nút bấm**. Màn được viết bằng code, build thành plugin Figma chạy **cục bộ**: không server, không gọi ra internet; chỉ khi bật cầu nối thì plugin nói chuyện với `localhost` để gửi trạng thái Figma về repo. Yêu cầu: Git, Figma Desktop, Python 3.10+.
 
 ## Cách hoạt động
 
@@ -16,6 +16,7 @@ flowchart LR
 - Plugin không ghi đè bản đã duyệt và phần designer tự chỉnh; tự nhận bố cục Section **Hiện tại / Cải tiến** có sẵn trong file Figma.
 - **Không áp đặt một cách làm.** Chọn trong `design-sync.json`: *sửa trực tiếp* trên khu Hiện tại (`target: "current"`, `layout: "sections"`, `sync: "merge"`…) hoặc *sinh màn mới / bản đề xuất* vào khu Cải tiến (`target: "improved"`, `layout: "grid"`, `sync: "replace"`), hoặc dùng cả hai. Cây Section chọn cấp, merge 3 chiều + Xem trước, nhãn màn, tự dọn khu thừa, trang Token & Component đều **tuỳ chọn**, mặc định tắt: xem [workflow.md](docs/workflow.md).
 - Màn dựng ra là **instance của component dùng chung + biến token**; extension chỉ khai luật khớp (`linkRules`, `linkTokens`), engine ở lõi lo phần còn lại và báo độ phủ: xem [workflow.md](docs/workflow.md) mục 5.
+- Chiều ngược, **chỉ đọc**: plugin đọc file Figma và đưa vào `project/figma-state/` để AI biết designer đã sửa gì (`python design_sync.py pull`, `figma-diff`); cầu nối localhost bật sẵn cho dự án mới, `"bridge": null` để plugin hoàn toàn offline, xem [workflow.md](docs/workflow.md) mục 6.
 - Dự án lớn: dữ liệu snapshot theo nhóm (`snapshot-dir`), build theo nhóm; web có sẵn thì chụp thành snapshot bằng `capture/` (tuỳ chọn).
 
 ## Bắt đầu nhanh

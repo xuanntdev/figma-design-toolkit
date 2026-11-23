@@ -54,3 +54,4 @@ Mục **bắt buộc** là phần lõi của kit; các mục còn lại là cấ
 - Ngoài mục 1, mọi hành vi đều là tuỳ chọn cấu hình với mặc định giữ hành vi gốc của kit: dự án *sửa trực tiếp* trên màn đang chạy hay *sinh màn mới / bản đề xuất* đều dùng được.
 - Không đưa tên dự án, dữ liệu, nghiệp vụ cụ thể vào kit chung.
 - Mọi thao tác ghi vào Figma đi qua plugin cục bộ của dự án.
+- Đồng bộ ngược Figma → repo (`pull`, `import-state`, `figma-diff`) **chỉ đọc**: không ghi node/plugin data, không đổi trang, không hoàn tác; cầu nối chỉ gọi `localhost`, bật sẵn cho dự án mới và tắt bằng `"bridge": null` (hoặc bỏ khoá, như dự án cũ) để plugin hoàn toàn offline.

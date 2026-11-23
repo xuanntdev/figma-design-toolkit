@@ -19,3 +19,11 @@
 ## 3. Chụp giao diện Web bằng Playwright làm đầu vào
 
 > Dùng `docs/capture-web.mjs` chụp route `<URL>` (viewport tự lấy theo `frame` trong `project/design-sync.json`) cho cả Sáng và Tối, kết hợp đọc DOM/CSS để dựng lại thành builder trong `project/extension/` rồi build plugin.
+
+## 4. Đồng bộ ngược từ Figma
+
+> Xem designer đã sửa gì trên Figma rồi hỏi mình xử lý. Chỉ ĐỌC Figma: không xoá, không ghi đè phần designer đã sửa. Mọi lệnh chạy ở thư mục gốc kit.
+> 1. Đọc `readAt` trong `project/figma-state/index.json`; thiếu hoặc cũ thì chạy `python design_sync.py pull` (cần cửa sổ plugin của dự án đang mở trong Figma Desktop; file lớn thêm `--timeout 180`). `pull` thất bại thì nhờ mình mở plugin rồi chạy lại, hoặc bấm **Xuất trạng thái** rồi `python design_sync.py import-state <tệp>`.
+> 2. Chạy `python design_sync.py figma-diff` (`--json` nếu cần xử lý tiếp) và tóm tắt theo từng màn: chữ thêm/bớt, đổi component/variant/property, đổi màu/token, node thêm/bớt, khung vẽ tay không có trong repo, màn plan chưa có trên Figma, token/component lệch bảng của extension. Màn `untouched` không cần nhắc; `repoChanged` nghĩa là nguồn repo đã đổi sau lần dựng (cần bấm **Cập nhật**, không phải sửa tay).
+> 3. Với mỗi nhóm thay đổi (màn / token / component / khung vẽ tay), hỏi mình chọn một: **(a)** chốt làm mốc mới (chỉ ghi nhận, `git add project/figma-state` khi mình bảo commit); **(b)** là yêu cầu sửa UI của app (chỉ LIỆT KÊ thay đổi đề xuất: màn, chỗ đổi, trước/sau; không sửa code app khi chưa được duyệt riêng); **(c)** cập nhật `project/extension/` (token, component, luật link) cho khớp Figma, rồi `build` + `check`.
+> Chưa được mình chọn thì chỉ báo cáo, không làm gì thêm.

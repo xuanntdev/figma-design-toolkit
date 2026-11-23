@@ -112,3 +112,29 @@ Theo [nguyen-tac.md](nguyen-tac.md) mục 1, màn dựng ra là **instance của
 - **Tìm khối lặp trước khi viết luật**: `node capture/find-repeats.mjs [--dir project/snapshots] [--min-screens 5] [--json out.json]` băm cấu trúc cây con của snapshot (bỏ chữ dữ liệu, vị trí, kích thước) và in khối lặp giữa nhiều màn, khối lớn nhất trước; khối nào lặp ≥ 5 màn thì nên là component.
 - **Ví dụ chạy được**: [`capture/link-example/`](../capture/link-example) (Button, Tag, App/Header + luật theo tên `thẻ.class`, token mẫu) trên `capture/sample-site`; cách dùng ở [capture.md](capture.md). `tests/link-extension/` là bản luật giả thuần dữ liệu dùng để kiểm lõi.
 
+
+## 6. Chiều ngược: Figma → repo (AI đọc được Figma đang có gì)
+
+Đồng bộ chính là repo → Figma. Chiều ngược **chỉ đọc** và đi qua plugin: plugin duyệt file Figma đang mở rồi đưa kết quả vào `project/figma-state/`; AI (hoặc người) đọc thư mục đó để biết Figma chứa gì và designer đã sửa gì. Không có lệnh nào ghi ngược vào Figma, không đổi tag/plugin data, không tạo bước hoàn tác (lệnh `readState` được kiểm bằng `verify_state.js`: cây tài liệu không đổi, không `commitUndo`).
+
+**Bố cục `project/figma-state/`** (mỗi lần kéo thay nguyên khối bằng bản mới):
+
+| Tệp | Nội dung |
+|---|---|
+| `index.json` | Trang, cây Section (tên, cấp, số màn), mọi khung màn: `screenId`, tên khung, đường dẫn Section, vị trí/kích thước, `status`, `fp`/`srcHash`/`buildHash`, `readAt` (thời điểm đọc, dùng kiểm độ mới) |
+| `screens/<mã màn>.json` | Cây node gọn, mỗi node một dòng: loại, tên, vị trí, bố cục, fill/stroke kèm tên biến, bo góc, chữ + text style + font; INSTANCE chỉ ghi component, variant, property, chữ hiển thị, instance lồng nhau |
+| `tokens.json` | Collection, biến (giá trị đã resolve, alias, scopes, code syntax), text style; thêm mục `repo` (bảng token extension khai ở `linkTokens()`) khi extension có khai, để so |
+| `components.json` | Component set trên trang Token & Component: biến thể, định nghĩa property, mô tả |
+
+`status` của khung màn: `untouched` = giống bản plugin dựng (vân tay `fp` khớp), `edited` = designer đã sửa, `handmade` = khung không do plugin tạo, `unknown` = khung bản cũ chưa có vân tay. Khung đã sửa mà chữ khác nguồn repo thì index có `textDiff` (thêm/bớt so với nguồn), và `repoChanged` báo nguồn repo đã đổi từ lần dựng.
+
+**Hai đường đưa trạng thái về repo:**
+
+1. **Cầu nối localhost**: khoá `bridge: {"port": 8787}` trong `design-sync.json`. `init` ghi sẵn khoá này cho dự án mới; dự án cũ (không có khoá) hoặc `"bridge": null` thì tắt: manifest vẫn `allowedDomains: ["none"]` và UI không có mã mạng. Bật thì manifest chỉ cho plugin gọi đúng `http://localhost:<cổng>`. `python design_sync.py serve` chạy máy chủ chỉ nghe `127.0.0.1`, chỉ ghi vào `project/figma-state/`, từ chối Origin/Host lạ và đường dẫn thoát thư mục. Trong plugin bấm **Gửi về repo**.
+2. **Không mạng**: bấm **Xuất trạng thái** (tải một tệp JSON, nút này luôn có), rồi `python design_sync.py import-state <tệp>` giải nén ra cùng bố cục.
+
+**Để AI tự kéo, không cần user bấm:** user để Figma Desktop và cửa sổ plugin mở. Plugin hỏi `GET /pending` trên localhost vài giây một lần (chỉ đọc khi repo đang chờ; máy chủ không chạy thì giãn nhịp dần tới 10 giây), thấy yêu cầu thì đọc và gửi kèm mã yêu cầu. `python design_sync.py pull [--timeout 60]` tạo yêu cầu (tự bật máy chủ nền nếu chưa chạy, nền tự thoát sau 30 phút không có plugin hỏi), chờ đúng mã rồi thoát 0; hết hạn thì thoát khác 0 với "Mở plugin trong Figma Desktop (để cửa sổ plugin mở)". Bài gửi sai/quá hạn mã bị bỏ qua. Giới hạn: plugin Figma chỉ chạy khi cửa sổ của nó còn mở, và đóng ngay khi user chạy plugin khác.
+
+**Xem khác biệt:** `python design_sync.py figma-diff [--json]` so `figma-state/` với bản đã commit ở git HEAD (mốc chốt trước) và với nguồn repo: màn sửa tay + đổi gì (chữ, component/variant/property, màu/token, node thêm/bớt), khung vẽ tay không có trong repo, màn plan chưa có trên Figma, token/text style lệch bảng token của extension, component set đổi. Quy trình cho AI (kéo, đọc, hỏi user xử lý từng nhóm thay đổi) ở [ai-prompts.md](ai-prompts.md) mục 4.
+
+**Có commit `figma-state/` không?** Nên commit: team và AI thấy cùng một trạng thái Figma, commit chính là cách "chốt làm mốc" cho lần `figma-diff` sau, và lịch sử git cho thấy designer đổi gì theo thời gian. Muốn không theo dõi thì thêm `/figma-state/` vào `project/.gitignore` (khi đó `figma-diff` chỉ so với nguồn repo, hoặc truyền `--base <thư mục>`).

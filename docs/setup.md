@@ -40,6 +40,7 @@ Mỗi lần sửa `project/`: chạy lại `build`, mở lại plugin, bấm **C
   "frame": "desktop",
   "target": "improved",
   "improved": true,
+  "bridge": { "port": 8787 },
   "labels": { "currentName": "Hiện tại", "improvedName": "Cải tiến" }
 }
 ```
@@ -54,6 +55,7 @@ Mọi khoá ngoài tên/cỡ khung đều **tuỳ chọn, mặc định giữ h�
 | `frame` | `mobile` | Cỡ khung màn: `desktop` (1440×1024), `tablet` (834×1194), `mobile` (393×873), `"1280x800"` hoặc `{ "width", "height", "perRow" }`. Lưới và mã dựng màn (`ST_GRID.cellW/cellH`) theo cỡ này. |
 | `target` | `improved` | Bấm **Cập nhật** dựng vào đâu: `improved` = khu **Cải tiến** (bản đề xuất, sinh màn mới), `current` = khu **Hiện tại** (vẽ lại màn đang chạy để designer sửa trực tiếp). |
 | `improved` | `true` | `false` = dự án chỉ có khu **Hiện tại**: plugin không tạo, không đòi, không đọc/ghi khu Cải tiến. Bắt buộc `target: "current"`. |
+| `bridge` | bật sẵn khi `init` (`{ "port": 8787 }`); không có khoá = tắt | Cầu nối localhost cho chiều Figma → repo ([workflow.md](workflow.md) mục 6): manifest cho plugin gọi đúng `http://localhost:<port>` (không địa chỉ nào khác), UI có nút **Gửi về repo** và hỏi `/pending`. Muốn plugin hoàn toàn offline thì đặt `"bridge": null` hoặc xoá khoá: `networkAccess` là `["none"]` và UI không có mã mạng. Port 1024–65535. Nút **Xuất trạng thái** + `import-state` luôn dùng được, không cần cầu nối. |
 | `labels` | | Đổi tên khung/trang: `currentName`, `improvedName`, `currentSub`, `improvedSub`, `pageFeatures`, `pageTokens`. |
 
 **Bố cục khu Hiện tại** (khi `target: "current"`; khu Cải tiến luôn là lưới/gương Section)
@@ -93,9 +95,14 @@ Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--exten
 | `node docs/capture-web.mjs <url> <screenId>` | Chụp màn web Sáng/Tối làm tham chiếu, viewport lấy theo `frame` của dự án (cần `npm i playwright`). |
 | `python design_sync.py build` | Dựng plugin offline cho `project/` ra `project/dist/`. |
 | `python design_sync.py check` | Kiểm giới hạn mã sạch (≤ 300 dòng/file, ≤ 40 dòng/hàm) của `project/extension/` và cú pháp `project/dist/code.js`. |
+| `python design_sync.py serve [--port] [--state-dir] [--idle-exit phút]` | Chạy cầu nối (chỉ `127.0.0.1`), nhận trạng thái Figma từ plugin vào `project/figma-state/`. Cổng mặc định lấy từ `bridge.port`. |
+| `python design_sync.py pull [--timeout 60]` | Xin plugin (đang mở trong Figma Desktop) đọc file Figma và chờ trạng thái về `project/figma-state/`; tự bật cầu nối nền nếu chưa chạy. Thoát khác 0 khi plugin không trả lời hoặc dự án đã tắt bridge. |
+| `python design_sync.py import-state <tệp>` | Nạp tệp JSON từ nút **Xuất trạng thái** của plugin vào `project/figma-state/` (không cần mạng). |
+| `python design_sync.py figma-diff [--json] [--base <thư mục>] [--no-git]` | So `project/figma-state/` với bản chốt trước (git HEAD) và nguồn repo; in báo cáo từng màn. Xem [workflow.md](workflow.md) mục 6. |
 | `python design_sync.py manifest --root <dir> --version <v> --commit <sha>` | Tạo `current/manifest.json` kèm SHA-256 cho thư mục ảnh chụp tham chiếu. |
 | `node capture/capture.mjs <nhóm>` / `node capture/gen-plan.mjs` | Tuỳ chọn: chụp web thành snapshot rồi sinh plan, xem [capture.md](capture.md). |
 | `node capture/find-repeats.mjs [--dir] [--min-screens N]` | Tìm khối lặp giữa các màn của snapshot để chọn khối cần thành component, xem [workflow.md](workflow.md) mục 5. |
 | `node verify_link.js` / `node verify_link_sample.js` | Kiểm engine link (luật giả; ví dụ `capture/link-example` trên trang mẫu). `verify_release.py` đã gọi sẵn. |
 | `node verify_project.js [code.js]` | Chạy plugin của dự án trong Figma giả: dựng hết màn trong plan, thiếu font, chạy lại ổn định (theo `sync`), hook Token (theo `tokens`). |
+| `node verify_state.js <code.js>` / `python verify_bridge.py [state-out]` | Kiểm `readState` (thuần đọc, trạng thái màn, token, component) và cầu nối + `import-state` + `figma-diff`. `verify_release.py` đã gọi sẵn. |
 | `python verify_release.py` | Chạy trọn bộ kiểm thử tự động (yêu cầu Node.js). |
