@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import html
 import json
 import re
@@ -13,6 +14,7 @@ MAX_FILE_LINES = 300
 MAX_FN_LINES = 40
 DEFAULT_UI_TITLE = "Đồng bộ thiết kế"
 FOOTER = "\n})();\n"
+_INCLUDE = re.compile(r"<!--INCLUDE (\S+)-->")
 _FN_START = re.compile(r"^(?:async\s+)?function\s+(\w+)")
 
 
@@ -42,13 +44,45 @@ def render_png_map(spec_path: Path) -> str:
     return f"{spec.get('comment', '')}\nconst {spec['const']} = {{\n" + ",\n".join(rows) + "\n};\n"
 
 
+def render_snapshot_dir(spec_path: Path) -> str:
+    """Chuyển {kind: snapshot-dir, dir, registry, index} thành dữ liệu JSON nhúng: registry[stem] = {...}; index.push(group).
+
+    `exclude` (tuỳ chọn) là danh sách stem bỏ khỏi bundle (cả snapshot lẫn nhóm).
+    `dir` chứa group.json ({id, title, order, screens:[{stem, title}]}) và <stem>.json cho từng màn.
+    Mảng/đối tượng registry + index phải được khai báo trước ở một mô-đun .js (vd 00-registry.js).
+    """
+    spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    folder = (spec_path.parent / spec["dir"]).resolve()
+    meta = json.loads((folder / "group.json").read_text(encoding="utf-8"))
+    skip = set(spec.get("exclude") or [])
+    meta["screens"] = [s for s in meta["screens"] if s["stem"] not in skip]
+    rows = []
+    for screen in meta["screens"]:
+        data = json.loads((folder / f"{screen['stem']}.json").read_text(encoding="utf-8"))
+        rows.append(f"{spec['registry']}[{json.dumps(screen['stem'])}] = {json.dumps(data, ensure_ascii=False, separators=(',', ':'))};")
+    group = {"id": meta["id"], "title": meta["title"], "order": meta.get("order", 99),
+             "screens": [{"stem": s["stem"], "title": s["title"]} for s in meta["screens"]]}
+    rows.append(f"{spec['index']}.push({json.dumps(group, ensure_ascii=False)});")
+    return "\n".join(rows) + "\n"
+
+
 def render_module(path: Path) -> str:
     if path.name.endswith(".gen.json"):
-        return render_png_map(path)
+        kind = json.loads(path.read_text(encoding="utf-8")).get("kind")
+        return render_snapshot_dir(path) if kind == "snapshot-dir" else render_png_map(path)
     return path.read_text(encoding="utf-8")
 
 
-def header(version: str, plan: dict | None = None, runtime: dict | None = None) -> str:
+def builder_hash(files: list[Path]) -> str:
+    """Hash mã bộ dựng (chỉ .js: lõi + extension, không tính dữ liệu .gen.json) để plugin biết khung dựng bằng mã cũ."""
+    digest = hashlib.sha1()
+    for path in files:
+        if path.suffix == ".js":
+            digest.update(path.name.encode("utf-8") + b"\0" + path.read_bytes() + b"\0")
+    return digest.hexdigest()[:12]
+
+
+def header(version: str, plan: dict | None = None, runtime: dict | None = None, builder: str = "") -> str:
     lines = [
         "// " + "=" * 76,
         "// BUILD OUTPUT: không sửa trực tiếp. Dựng từ lõi + extension bằng `python design_sync.py build`.",
@@ -57,6 +91,7 @@ def header(version: str, plan: dict | None = None, runtime: dict | None = None) 
         '"use strict";',
         f"const PLUGIN_VERSION = {json.dumps(version)};",
         f"const DESIGN_CONFIG = {json.dumps(runtime or {}, ensure_ascii=False)};",
+        f"const BUILDER_HASH = {json.dumps(builder)};",
     ]
     if plan is not None:
         lines.append(f"const DRAFT_PLAN = {json.dumps(plan, ensure_ascii=False)};")
@@ -73,7 +108,8 @@ def module_files(extensions: list[Path]) -> list[Path]:
 
 
 def bundle_text(extensions: list[Path], version: str, plan: dict | None = None, runtime: dict | None = None) -> str:
-    return header(version, plan, runtime) + "".join(render_module(p) for p in module_files(extensions)) + FOOTER
+    files = module_files(extensions)
+    return header(version, plan, runtime, builder_hash(files)) + "".join(render_module(p) for p in files) + FOOTER
 
 
 def build(
@@ -98,7 +134,8 @@ def build(
         runtime["name"] = name
     text = bundle_text(extensions, version, plan=plan, runtime=runtime)
     (out_dir / "code.js").write_text(text, encoding="utf-8", newline="\n")
-    ui = (ui_path or (PLUGIN_DIR / "ui.html")).read_text(encoding="utf-8")
+    ui_file = ui_path or (PLUGIN_DIR / "ui.html")
+    ui = _INCLUDE.sub(lambda m: (ui_file.parent / m.group(1)).read_text(encoding="utf-8"), ui_file.read_text(encoding="utf-8"))
     if name:
         ui = ui.replace(f"<h1>{DEFAULT_UI_TITLE}</h1>", f"<h1>{html.escape(name)}</h1>")
     (out_dir / "ui.html").write_text(ui, encoding="utf-8", newline="\n")
