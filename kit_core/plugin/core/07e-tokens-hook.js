@@ -16,6 +16,7 @@ async function tokHookRun(args) {
   try {
     assertCanWrite(args);
     const page = await stEnsurePage(stOpts(args).pageTokens);
+    if (liveProtected().has(figma.currentPage.id)) await figma.setCurrentPageAsync(page);
     const value = await build(page);
     if (typeof lkOnTokens === 'function') await lkOnTokens(page);
     stampFile();

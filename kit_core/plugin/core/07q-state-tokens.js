@@ -35,7 +35,7 @@ function rsResolve(v, byId, cols, depth) {
 function rsVariable(v, col, ctx, byId, cols) {
   const values = {};
   for (const m of col.modes) values[m.name] = rsValue((v.valuesByMode || {})[m.modeId], ctx);
-  const out = { name: v.name, type: v.resolvedType, values, resolved: rsValue(rsResolve(v, byId, cols, 0), ctx) };
+  const out = { id: v.id, name: v.name, type: v.resolvedType, values, resolved: rsValue(rsResolve(v, byId, cols, 0), ctx) };
   if (v.scopes && v.scopes.length) out.scopes = v.scopes;
   if (v.codeSyntax && Object.keys(v.codeSyntax).length) out.codeSyntax = v.codeSyntax;
   if (v.description) out.description = v.description;
@@ -49,7 +49,7 @@ function rsLineHeight(lh) {
 }
 
 function rsTextStyle(s, ctx) {
-  const out = { name: s.name };
+  const out = { id: s.id, name: s.name };
   if (s.fontName) out.font = s.fontName.family + ' ' + s.fontName.style;
   if (s.fontSize != null) out.size = s.fontSize;
   const lh = rsLineHeight(s.lineHeight);
@@ -80,11 +80,14 @@ async function rsTokens(ctx) {
     const byId = new Map(all.map((v) => [v.id, v]));
     for (const col of cols.values()) {
       const vars = all.filter((v) => v.variableCollectionId === col.id).map((v) => rsVariable(v, col, ctx, byId, cols));
-      collections.push({ name: col.name, modes: col.modes.map((m) => m.name), variables: vars });
+      collections.push({ id: col.id, name: col.name, modes: col.modes.map((m) => m.name), modeIds: Object.fromEntries(col.modes.map((m) => [m.name, m.modeId])), variables: vars });
     }
   }
   const styles = figma.getLocalTextStylesAsync ? await figma.getLocalTextStylesAsync() : [];
-  return { collections, textStyles: styles.map((s) => rsTextStyle(s, ctx)), repo: rsRepoTokens() };
+  const getStyles = (styles) => styles.map(({ id, name }) => ({ id, name }));
+  const paintStyles = getStyles(await figma.getLocalPaintStylesAsync?.() || []);
+  const effectStyles = getStyles(await figma.getLocalEffectStylesAsync?.() || []);
+  return { collections, textStyles: styles.map((s) => rsTextStyle(s, ctx)), paintStyles, effectStyles, repo: rsRepoTokens() };
 }
 
 function rsTokenPageName() {
@@ -97,25 +100,31 @@ async function rsPropDefs(defs, ctx) {
     const d = defs[k];
     const row = { type: d.type, default: d.type === 'INSTANCE_SWAP' ? await rsNameOf(d.defaultValue, ctx) : d.defaultValue };
     if (d.variantOptions) row.options = d.variantOptions;
-    out[k.split('#')[0]] = row;
+    out[k.split('#')[0]] = { ...row, propertyId: k };
   }
   return out;
 }
 
 async function rsComponentSet(set, ctx) {
   const tag = typeof lkTag === 'function' ? stTagOf(set, lkTag()) : '';
-  const out = { name: set.name, description: set.description || '', props: await rsPropDefs(set.componentPropertyDefinitions, ctx) };
+  const out = { id: set.id, name: set.name, description: set.description || '', props: await rsPropDefs(set.componentPropertyDefinitions, ctx) };
   if (tag) out.key = tag;
   out.variants = (set.children || []).filter((c) => !c.removed).map((c) => c.name);
+  out.variantNodes = (set.children || []).filter((c) => !c.removed).map((c) => ({ id: c.id, name: c.name }));
   return out;
 }
 
 async function rsComponents(ctx) {
-  const page = figma.root.children.find((p) => p.name === rsTokenPageName());
-  if (!page) return { page: null, sets: [], components: [] };
-  await page.loadAsync();
   const sets = [];
-  for (const s of page.findAll((n) => n.type === 'COMPONENT_SET')) sets.push(await rsComponentSet(s, ctx));
-  const single = page.findAll((n) => n.type === 'COMPONENT' && n.parent && n.parent.type !== 'COMPONENT_SET');
-  return { page: page.name, sets, components: single.map((c) => ({ name: c.name, description: c.description || '' })) };
+  const components = [];
+  for (const page of figma.root.children) {
+    const meta = { pageId: page.id, page: page.name };
+    for (const node of page.findAll((n) => n.type === 'COMPONENT' || n.type === 'COMPONENT_SET')) {
+      if (node.type === 'COMPONENT_SET') sets.push({ ...await rsComponentSet(node, ctx), ...meta });
+      else if (node.parent?.type !== 'COMPONENT_SET') {
+        components.push({ id: node.id, name: node.name, description: node.description || '', ...meta });
+      }
+    }
+  }
+  return { page: sets[0]?.page || components[0]?.page || null, sets, components };
 }

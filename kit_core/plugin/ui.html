@@ -71,18 +71,20 @@
   .st { margin-top: 8px; font-size: 12px; color: var(--muted); word-break: break-word; }
   .st.ok { color: var(--success); font-weight: 600; }
   .st.err { color: var(--danger); font-weight: 600; }
+  body[data-mode="read"] h1 { margin-bottom: 4px; }
 </style>
 </head>
-<body>
+<body data-mode="__UI_MODE__">
   <h1>Đồng bộ thiết kế</h1>
 
+  <template id="designControls">
   <div id="aiContent" class="content">
     <div class="row"><div class="row-t">Đang tải…</div></div>
   </div>
 
   <div class="actions">
-    <button id="btnUpdate" class="btn-primary">Cập nhật</button>
-    <button id="btnRollback" class="btn-secondary" disabled>Hoàn tác</button>
+    <button id="btnUpdate" class="btn-primary" hidden>Cập nhật</button>
+    <button id="btnRollback" class="btn-secondary" hidden disabled>Hoàn tác</button>
     <button id="btnExport" class="btn-secondary" style="display:none" title="Xuất JSON các màn đã sửa tay / đang xung đột để lưu vào repo">Xuất thay đổi</button>
     <button id="btnTokens" class="btn-secondary" style="display:none" title="Chỉ làm mới trang Token &amp; Component (extension có buildTokens)">Token</button>
   </div>
@@ -90,9 +92,14 @@
   <div id="prog" class="prog">
     <div class="track"><div id="fill" class="fill"></div></div>
   </div>
+  </template>
   <div id="st" class="st" aria-live="polite"></div>
 
   <script>
+    const readOnly = document.body.dataset.mode === 'read';
+    const designControls = document.getElementById('designControls');
+    if (!readOnly) designControls.replaceWith(designControls.content);
+    else designControls.remove();
     const btnUpdate = document.getElementById('btnUpdate');
     const btnRollback = document.getElementById('btnRollback');
     const prog = document.getElementById('prog');
@@ -168,6 +175,7 @@
     }
 
     function renderPlan(cat) {
+      btnUpdate.hidden = btnRollback.hidden = !cat || cat.hasBuilder === false;
       const plan = (cat && cat.defaultPlan) || {};
       let rows = Array.isArray(plan.items) ? plan.items : null;
       if (!rows) {
@@ -205,7 +213,7 @@
       renderRows(rows);
     }
 
-    document.getElementById('btnTokens').onclick = async (e) => {
+    if (!readOnly) document.getElementById('btnTokens').onclick = async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
       btnUpdate.disabled = true;
@@ -224,7 +232,7 @@
       }
     };
 
-    btnRollback.onclick = async () => {
+    if (!readOnly) btnRollback.onclick = async () => {
       if (!canRollback) return;
       btnUpdate.disabled = true;
       btnRollback.disabled = true;
@@ -250,7 +258,7 @@
     window.onmessage = (e) => {
       const m = e.data && e.data.pluginMessage;
       if (!m) return;
-      if (m.type === 'PLUGIN_PROGRESS') {
+      if (m.type === 'PLUGIN_PROGRESS' && !readOnly) {
         prog.classList.add('on');
         fill.style.width = Math.min(100, m.pct || 0) + '%';
         if (m.text) setStatus(m.text);
@@ -262,7 +270,7 @@
       }
     };
 
-    (async () => {
+    if (!readOnly) (async () => {
       try {
         cachedCat = await callMain('getCatalog', {});
         renderPlan(cachedCat);
@@ -273,7 +281,6 @@
     })();
   </script>
 <!--INCLUDE ui-sync.html-->
-<!--INCLUDE ui-state.html-->
 <!--INCLUDE ui-bridge.html-->
 </body>
 </html>

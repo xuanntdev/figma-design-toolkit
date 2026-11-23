@@ -1,0 +1,170 @@
+<script>
+  const LIVE_URL = 'http://localhost:__BRIDGE_PORT__/live/';
+  const LIVE_KEY = '__BRIDGE_KEY__';
+  const liveCommands = Object.freeze({
+    state: 'readState', selection: 'liveSelection', tree: 'liveTree', exportPng: 'exportPng',
+    impact: 'liveImpact', edit: 'liveEdit', create: 'liveCreate',
+    protect: 'liveProtect', stage: 'liveStage',
+  });
+  let liveSession = null;
+  let liveBusy = false;
+  let liveBatch = null;
+  const liveLine = document.createElement('div');
+  const liveStatus = document.createElement('span');
+  const liveConnect = document.createElement('button');
+  const liveDiscard = document.createElement('button');
+  liveLine.className = 'st';
+  liveStatus.setAttribute('role', 'status');
+  liveConnect.textContent = 'Kết nối file';
+  liveDiscard.textContent = 'Bỏ lượt chờ';
+  liveDiscard.hidden = true;
+  liveLine.append(liveConnect, ' ', liveStatus, ' ', liveDiscard);
+  document.getElementById('st').after(liveLine);
+
+  async function liveCall(path, data) {
+    const init = { headers: { 'X-Design-Sync-Key': LIVE_KEY }, method: data ? 'POST' : 'GET' };
+    if (data) init.body = JSON.stringify(data);
+    const response = await fetch(LIVE_URL + path, init);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Cầu nối không trả lời.');
+    return payload;
+  }
+
+  function livePost(path, data) {
+    return liveCall(path, { ...data, session: liveSession.id });
+  }
+
+  function liveClear() {
+    if (!readOnly && liveBatch) {
+      renderPlan(cachedCat);
+      setStatus('');
+    }
+    liveSession = liveBatch = null;
+    liveDiscard.hidden = true;
+    liveConnect.textContent = 'Kết nối file';
+  }
+
+  liveConnect.onclick = async () => {
+    if (liveBusy) return;
+    liveBusy = true;
+    liveConnect.disabled = true;
+    try {
+      if (liveSession) {
+        await livePost('detach', {});
+        liveClear();
+        liveStatus.textContent = 'Đã ngắt kết nối';
+      } else {
+        liveSession = await liveCall('attach', await callMain('liveFile', {}));
+        liveConnect.textContent = 'Ngắt kết nối';
+        liveStatus.textContent = 'Đã kết nối · ' + liveSession.file;
+      }
+    } catch (err) {
+      liveStatus.textContent = err.message;
+    } finally {
+      liveBusy = false;
+      liveConnect.disabled = false;
+    }
+  };
+
+  function liveRender(batch) {
+    if (readOnly) return;
+    const rows = batch.preview.changes.concat(batch.preview.blocked);
+    renderRows(rows.map((row) => ({
+      title: row.page + ' · ' + row.screen, desc: row.details.join(', '),
+      badge: row.blocked ? 'Cấm ghi' : '',
+    })));
+    btnUpdate.hidden = false;
+    liveDiscard.hidden = false;
+    setStatus('Bấm Cập nhật để ghi các màn đã liệt kê.');
+  }
+
+  async function liveRun(job) {
+    let output;
+    try {
+      if (!Object.hasOwn(liveCommands, job.command)) throw new Error('Lệnh cầu nối không được hỗ trợ.');
+      output = { result: await callMain(liveCommands[job.command], { ...job.args, jobId: job.id }) };
+    } catch (err) {
+      output = { error: err.message };
+    }
+    await livePost('result/' + job.id, output);
+    if (!output.error && job.command === 'stage' && output.result.changes.length) {
+      liveBatch = { id: job.id, preview: output.result };
+      liveRender(liveBatch);
+    }
+  }
+
+  async function livePoll() {
+    if (!liveSession) return;
+    try {
+      if (liveBusy || inflight) {
+        await livePost('touch', {});
+        return;
+      }
+      liveBusy = true;
+      try {
+        const { job, batch } = await livePost('poll', {});
+        if (batch?.state === 'ready' && liveBatch?.id !== batch.id) {
+          liveBatch = batch;
+          liveRender(batch);
+        }
+        if (job) await liveRun(job);
+      } finally {
+        liveBusy = false;
+      }
+    } catch (err) {
+      liveStatus.textContent = err.message;
+      liveClear();
+    }
+  }
+
+  liveDiscard.onclick = async () => {
+    if (!liveBatch || liveBusy) return;
+    liveBusy = true;
+    try {
+      await livePost('batch/discard', { id: liveBatch.id });
+      liveBatch = null;
+      liveDiscard.hidden = true;
+      renderPlan(cachedCat);
+      setStatus('Đã bỏ lượt chờ cập nhật.');
+    } catch (err) {
+      setStatus(err.message, 'err');
+    } finally {
+      liveBusy = false;
+    }
+  };
+
+  function liveHandleUpdate() {
+    if (liveBusy) return true;
+    if (!liveBatch) return false;
+    liveApply();
+    return true;
+  }
+
+  async function liveApply() {
+    const id = liveBatch.id;
+    liveBusy = true;
+    btnUpdate.disabled = true;
+    try {
+      await livePost('batch/begin', { id });
+      let output;
+      try {
+        output = { result: await callMain('liveApply', { jobId: id }) };
+      } catch (err) {
+        output = { error: err.message };
+      }
+      await livePost('batch/finish', { id, ...output });
+      setStatus(output.error || 'Đã cập nhật ' + output.result.changed + ' layer.', output.error ? 'err' : 'ok');
+    } catch (err) {
+      setStatus(err.message, 'err');
+    } finally {
+      liveBatch = null;
+      liveBusy = false;
+      liveDiscard.hidden = true;
+      if (cachedCat && cachedCat.hasBuilder !== false) renderPlan(cachedCat);
+      else btnUpdate.hidden = true;
+      btnUpdate.disabled = false;
+    }
+  }
+
+  setInterval(livePoll, 700);
+</script>

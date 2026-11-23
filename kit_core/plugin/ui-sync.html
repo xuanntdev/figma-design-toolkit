@@ -30,7 +30,7 @@
 
   // Theo design-sync.json (qua getCatalog): `preview` bật bước Xem trước, `sync: merge` mới có Xuất thay đổi, `tokens` quyết định nút Token.
   function applySettings(s) {
-    document.getElementById('btnExport').style.display = s.sync === 'merge' ? '' : 'none';
+    document.getElementById('btnExport').style.display = cachedCat.hasBuilder !== false && s.sync === 'merge' ? '' : 'none';
     document.getElementById('btnTokens').style.display = s.tokens && s.tokens !== 'off' ? '' : 'none';
   }
 
@@ -115,9 +115,14 @@
     try {
       const res = await callMain('updateDraft', {});
       fill.style.width = '100%';
+      canRollback = (res.builtCount || 0) + (res.movedCount || 0) + (res.removedCurrent?.removed || 0) > 0;
+      if (!res.merge) {
+        renderSyncResult(res.groups, 'update');
+        setStatus('Đã cập nhật ' + (res.builtCount || 0) + ' khung (' + (res.groups?.length || 0) + ' nhóm).', 'ok');
+        return;
+      }
       const c = res.merge.counts;
       renderSummary(res.merge, 'Kết quả cập nhật');
-      canRollback = (res.builtCount || 0) + (res.movedCount || 0) > 0;
       const notes = res.cleanup && Array.isArray(res.cleanup.notes) ? res.cleanup.notes : [];
       const created = listOf(res.merge, 'create').length;
       const conflicts = mergeOn() ? ' · ' + c.conflict + ' xung đột' : '';
@@ -211,7 +216,11 @@
     cfPanel.style.display = 'none';
     actions.before(cfPanel);
     actions.before(applyBar);
-    btnUpdate.onclick = () => (previewOn() ? runPreview() : runApply());
+    btnUpdate.onclick = () => {
+      if (typeof liveHandleUpdate === 'function' && liveHandleUpdate()) return;
+      if (!cachedCat || cachedCat.hasBuilder === false) return;
+      return previewOn() ? runPreview() : runApply();
+    };
     document.getElementById('btnExport').onclick = runExport;
     refreshConflicts().catch(() => {});
   })();

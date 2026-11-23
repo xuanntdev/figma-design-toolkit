@@ -38,7 +38,7 @@ def verify_scenarios(kit: Path, work: Path) -> None:
     }
     for name, options in configs.items():
         build.build([ext], work / "scenarios" / name, runtime=config.runtime({"frame": frame, **options}), plan=plan)
-    subprocess.run(["node", str(kit / "verify_scenarios.js"), str(work / "scenarios")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_scenarios.js"), str(work / "scenarios")], check=True)
 
 
 BAD_OPTIONS = (
@@ -82,7 +82,7 @@ def verify_options(kit: Path, work: Path) -> None:
     for name, options in variants.items():
         build.build([ext], work / "options" / name, runtime=config.runtime({"frame": FRAME, **base, **options}), plan=seven_plan())
     build_sorting(kit, work)
-    subprocess.run(["node", str(kit / "verify_options.js"), str(work / "options")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_options.js"), str(work / "options")], check=True)
 
 
 def build_sorting(kit: Path, work: Path) -> None:

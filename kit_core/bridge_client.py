@@ -13,14 +13,15 @@ from pathlib import Path
 
 from kit_core import bridge
 
-OPEN_PLUGIN_HINT = "Mở plugin trong Figma Desktop (để cửa sổ plugin mở) rồi chạy lại; hoặc bấm Gửi về repo / Xuất trạng thái trong plugin."
+OPEN_PLUGIN_HINT = "Mở plugin trong Figma Desktop, giữ cửa sổ mở rồi chạy lại."
 PLUGIN_FRESH = 30  # giây: plugin hỏi /pending trong khoảng này thì coi là đang mở
 AUTO_IDLE_MINUTES = 30
 
 
-def call(port: int, method: str, path: str, timeout: float = 3) -> dict:
+def call(port: int, method: str, path: str, timeout: float = 3, *, data=None, headers=None) -> dict:
     """Gọi cầu nối trên 127.0.0.1; ném OSError khi không kết nối được."""
-    req = urllib.request.Request(f"http://{bridge.LOOPBACK}:{port}{path}", method=method, data=b"" if method == "POST" else None)
+    body = json.dumps(data).encode("utf-8") if data is not None else (b"" if method == "POST" else None)
+    req = urllib.request.Request(f"http://{bridge.LOOPBACK}:{port}{path}", method=method, data=body, headers=headers or {})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -36,12 +37,15 @@ def alive(port: int) -> dict | None:
     return info if info.get("bridge") == bridge.STATE_KIND else None
 
 
-def start_server(port: int, script: Path, state_dir: Path) -> None:
+def start_server(port: int, script: Path, state_dir: Path, *, project_dir: Path | None = None) -> None:
     """Bật `serve` chạy nền (tự thoát sau AUTO_IDLE_MINUTES không có plugin hỏi) để pull dùng được ngay."""
-    log = open(Path(tempfile.gettempdir()) / f"design-sync-bridge-{port}.log", "a", encoding="utf-8")
     flags = {"creationflags": 0x00000008} if sys.platform == "win32" else {"start_new_session": True}
-    cmd = [sys.executable, str(script), "serve", "--port", str(port), "--state-dir", str(state_dir), "--idle-exit", str(AUTO_IDLE_MINUTES)]
-    subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL, **flags)
+    cmd = [sys.executable, str(script)]
+    if project_dir is not None:
+        cmd.extend(["--project-dir", str(project_dir)])
+    cmd.extend(["serve", "--port", str(port), "--state-dir", str(state_dir), "--idle-exit", str(AUTO_IDLE_MINUTES)])
+    with (Path(tempfile.gettempdir()) / f"design-sync-bridge-{port}.log").open("a", encoding="utf-8") as log:
+        subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL, **flags)
     for _ in range(40):
         if alive(port):
             return
@@ -65,15 +69,15 @@ def wait_request(port: int, rid: str, timeout: float, interval: float = 0.4) -> 
     raise ValueError(f"Plugin đã nhận yêu cầu nhưng chưa gửi kết quả sau {timeout:g}s (file lớn? thử --timeout 180).")
 
 
-def pull(port: int, script: Path, state_dir: Path, timeout: float = 60) -> dict:
+def pull(port: int, script: Path, state_dir: Path, timeout: float = 60, *, project_dir: Path | None = None) -> dict:
     if not alive(port):
-        start_server(port, script, state_dir)
+        start_server(port, script, state_dir, project_dir=project_dir)
     rid = call(port, "POST", "/request")["id"]
     return wait_request(port, rid, timeout)
 
 
 def import_state(file: Path, state_dir: Path) -> dict:
-    """Nạp tệp JSON do plugin xuất (nút Xuất trạng thái) vào state_dir, cùng bố cục với cầu nối."""
+    """Nạp một snapshot JSON có sẵn vào state_dir, cùng bố cục với cầu nối."""
     if not file.is_file():
         raise ValueError(f"Không tìm thấy tệp {file}.")
     try:

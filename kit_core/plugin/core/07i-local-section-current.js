@@ -35,6 +35,7 @@ function localPlaceInCurrent(currentSide, target, replace, batchId) {
   const base = { groupId: target.group.id, groupTitle: target.group.title, screenId: target.screen.id, theme: target.theme };
   if (!replace && same.length) return Object.assign(base, { frameId: same[0].id, reused: true, keptProtected: kept.length });
   const slot = localNextSlot(group, drafts);
+  const replacedIds = drafts.map((n) => n.id);
   drafts.forEach((n) => n.remove());
   const frame = stBuildFrame(target.screen.raw, target.theme);
   group.appendChild(frame);
@@ -43,5 +44,5 @@ function localPlaceInCurrent(currentSide, target, replace, batchId) {
   if (frame.x + frame.width + 60 > group.width) group.resize(frame.x + frame.width + 60, group.height);
   if (frame.y + frame.height + 60 > group.height) group.resize(group.width, frame.y + frame.height + 60);
   stTag(frame, { screenId: target.screen.id, theme: target.theme, source: 'ai', status: 'draft', variant: 0, batchId });
-  return Object.assign(base, { frameId: frame.id, reused: false, replaced: drafts.length, keptProtected: kept.length });
+  return Object.assign(base, { frameId: frame.id, reused: false, replaced: drafts.length, keptProtected: kept.length, replacedIds });
 }

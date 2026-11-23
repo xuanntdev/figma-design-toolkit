@@ -16,6 +16,7 @@ function rpApply(parent, t, o) {
     drafts.forEach((n) => o.info && stSetScreenLabel(parent, n, o.info));
     return Object.assign(out, { frameId: same[0].id, reused: true, action: 'skip' });
   }
+  const replacedIds = drafts.map((n) => n.id);
   drafts.forEach((n) => {
     stDropLabels(parent, n);
     n.remove();
@@ -25,7 +26,7 @@ function rpApply(parent, t, o) {
   parent.appendChild(frame);
   stTag(frame, Object.assign({ screenId: id, theme: t.theme, source: 'ai', status: 'draft', variant: kept.length, batchId: o.batchId }, o.tags || {}));
   if (o.info) stSetScreenLabel(parent, frame, o.info);
-  return Object.assign(out, { frameId: frame.id, reused: false, replaced: drafts.length });
+  return Object.assign(out, { frameId: frame.id, reused: false, replaced: drafts.length, replacedIds });
 }
 
 // Ghi (hoặc giữ) khung một ô trong `parent` theo `sync`. o: { replace, batchId, info (tên/nhãn màn, null = không đặt), tags }.

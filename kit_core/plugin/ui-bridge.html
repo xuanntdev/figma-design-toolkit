@@ -1,14 +1,14 @@
 <script>
-  // Cầu nối localhost (chỉ có khi design-sync.json bật bridge): "Gửi về repo" gửi trạng thái ngay; ngoài ra cửa sổ này hỏi
-  // GET /pending mỗi vài giây và chỉ đọc + gửi khi repo (design_sync.py pull) đang chờ. Máy chủ không chạy thì giãn nhịp hỏi.
+  // Chỉ đọc khi có yêu cầu từ CLI. Giãn nhịp hỏi khi cầu nối localhost chưa chạy.
   const BRIDGE_URL = 'http://localhost:__BRIDGE_PORT__';
   const BRIDGE_POLL_MS = 3000;
   const BRIDGE_MAX_MS = 10000;
   let bridgeBusy = false;
   let bridgeDelay = BRIDGE_POLL_MS;
-  let bridgeHandled = null;
   let bridgeLast = null;
-  const bridgeLine = el('div', 'st');
+  const bridgeLine = document.createElement('div');
+  bridgeLine.className = 'st';
+  bridgeLine.setAttribute('role', 'status');
 
   function clock(d) {
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
@@ -16,8 +16,8 @@
 
   function showBridge(connected) {
     bridgeLine.textContent = connected
-      ? 'Đã kết nối repo' + (bridgeLast ? ' · lần đọc cuối ' + clock(bridgeLast) : '')
-      : 'Chưa kết nối repo (chạy python design_sync.py serve, cổng __BRIDGE_PORT__)';
+      ? (bridgeLast ? 'Đã đọc lúc ' + clock(bridgeLast) : 'Đã kết nối · chờ yêu cầu đọc')
+      : 'Chờ kết nối cục bộ';
   }
 
   async function bridgeCall(method, path, body) {
@@ -30,7 +30,7 @@
     return res.json();
   }
 
-  // Đọc Figma rồi gửi lên cầu nối kèm requestId (nếu có); lỗi đọc cũng báo lại để `pull` thôi chờ.
+  // Trả kết quả kèm mã yêu cầu để CLI nhận đúng lần đọc.
   async function bridgeSend(requestId) {
     let payload;
     try {
@@ -40,7 +40,6 @@
     }
     const res = await bridgeCall('POST', '/state', payload);
     if (res.ok) bridgeLast = new Date();
-    res.text = res.ok ? stateSummary(payload) : '';
     return res;
   }
 
@@ -49,10 +48,10 @@
       try {
         const r = await bridgeCall('GET', '/pending');
         bridgeDelay = BRIDGE_POLL_MS;
-        if (r.pending && r.pending.id !== bridgeHandled) {
+        if (r.pending) {
           bridgeBusy = true;
-          bridgeHandled = r.pending.id;
-          await bridgeSend(r.pending.id).catch(() => {});
+          bridgeLine.textContent = 'Đang đọc trạng thái…';
+          await bridgeSend(r.pending.id);
           bridgeBusy = false;
         }
         showBridge(true);
@@ -65,29 +64,7 @@
     setTimeout(bridgePoll, bridgeDelay);
   }
 
-  async function runBridgePush(btn) {
-    btn.disabled = true;
-    setStatus('Đang đọc file Figma và gửi về repo…');
-    try {
-      const res = await bridgeSend(null);
-      if (!res.ok) throw new Error(res.error || 'repo từ chối');
-      setStatus('Đã gửi về repo: ' + res.text + '.', 'ok');
-      showBridge(true);
-    } catch (err) {
-      const down = err instanceof TypeError;
-      setStatus(down ? 'Chưa chạy design_sync.py serve (cổng __BRIDGE_PORT__). Hoặc dùng Xuất trạng thái rồi import-state.' : 'Lỗi: ' + err.message, 'err');
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  (function initBridge() {
-    const btn = el('button', 'btn-secondary', 'Gửi về repo');
-    btn.title = 'Đọc file Figma và gửi trạng thái về project/figma-state/ (cần design_sync.py serve)';
-    btn.onclick = () => runBridgePush(btn);
-    document.querySelector('.actions').appendChild(btn);
-    document.getElementById('st').after(bridgeLine);
-    showBridge(false);
-    bridgePoll();
-  })();
+  document.getElementById('st').after(bridgeLine);
+  showBridge(false);
+  bridgePoll();
 </script>

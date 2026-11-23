@@ -1,6 +1,6 @@
 // Chiều ngược Figma -> repo (3/3): lệnh `readState` duyệt cả file và trả { kind, version, files } — index.json (trang, Section, từng khung màn
 // kèm trạng thái untouched | edited | handmade | unknown), screens/<khoá>.json (cây node), tokens.json, components.json. THUẦN ĐỌC: không ghi
-// node/plugin data, không đổi trang, không commitUndo. Nơi nhận: cầu nối localhost (design_sync.py serve/pull) hoặc tệp tải về (import-state).
+// node/plugin data, không đổi trang, không commitUndo. Nơi nhận: cầu nối localhost (design_sync.py pull).
 
 const RS_KIND = 'figma-state';
 const RS_VERSION = 1;
@@ -33,12 +33,25 @@ function rsWalk(node, path, acc) {
       const here = path.concat(c.name);
       acc.sections.push({ id: c.id, path: here.join(' / '), name: c.name, level: stTagOf(c, 'treeLevel') || String(here.length), screens: 0 });
       rsWalk(c, here, acc);
+    } else if (c.type === 'GROUP') {
+      rsWalk(c, path.concat(c.name), acc);
     } else if (c.type === 'FRAME') {
       const role = stTagOf(c, 'role');
       // Khung có screenId luôn là một màn (target=current thì chính khung màn mang role 'cell'); container/cell không mã màn chỉ là khung chứa.
-      if (stTagOf(c, 'screenId') || (!role)) acc.frames.push({ frame: c, path });
+      if (stTagOf(c, 'screenId') || !role) {
+        acc.frames.push({ frame: c, path });
+        rsWalkCreated(c, path.concat(c.name), acc);
+      }
       else if (role === 'container' || role === 'cell') rsWalk(c, path, acc);
     }
+  }
+}
+
+function rsWalkCreated(node, path, acc) {
+  for (const c of node.children || []) {
+    if (c.removed || !['FRAME', 'GROUP', 'SECTION'].includes(c.type)) continue;
+    if (stTagOf(c, LIVE_SCREEN_KEY)) acc.frames.push({ frame: c, path });
+    rsWalkCreated(c, path.concat(c.name), acc);
   }
 }
 
@@ -62,7 +75,7 @@ function rsRepoInfo(f, row) {
 
 function rsRow(f, path, page, st) {
   const screenId = stTagOf(f, 'screenId');
-  const row = Object.assign({ screenId: screenId || null, name: f.name, id: f.id, page: page.name, section: path.join(' / ') }, rsGeom(f), st);
+  const row = Object.assign({ screenId: screenId || null, name: f.name, id: f.id, pageId: page.id, page: page.name, section: path.join(' / ') }, rsGeom(f), st);
   row.theme = stTagOf(f, 'theme') || (screenId ? 'light' : '');
   row.groupId = stTagOf(f, 'groupId');
   row.srcHash = stTagOf(f, 'srcHash');
@@ -88,7 +101,7 @@ async function rsScreens(ctx, maxNodes) {
   const used = new Set();
   for (const page of figma.root.children) {
     const acc = { sections: [], frames: [] };
-    if (page.name !== rsTokenPageName()) rsWalk(page, [], acc);
+    rsWalk(page, [], acc);
     for (const { frame, path } of acc.frames) {
       const row = rsRow(frame, path, page, rsStatus(frame));
       row.key = rsKey(row, used);
@@ -99,7 +112,10 @@ async function rsScreens(ctx, maxNodes) {
       const sec = acc.sections.find((s) => s.path === row.section);
       if (sec) sec.screens += 1;
     }
-    pages.push({ id: page.id, name: page.name, role: page.name === rsTokenPageName() ? 'tokens' : 'screens', sections: acc.sections, frames: acc.frames.length });
+    pages.push({
+      id: page.id, name: page.name, blocked: liveProtected().has(page.id),
+      role: page.name === rsTokenPageName() ? 'tokens' : 'screens', sections: acc.sections, frames: acc.frames.length,
+    });
   }
   return { pages, rows, files };
 }

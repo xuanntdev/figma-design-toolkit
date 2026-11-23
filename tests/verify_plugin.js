@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { strictNode, markRemoved } = require('./tests/strict-node.js');
+const { strictNode, markRemoved } = require('./strict-node.js');
 
 let seq = 1;
 class MockNode {
@@ -222,7 +222,7 @@ async function testLegacyPages(bundlePath) {
 }
 
 (async () => {
-  const bundlePath = process.argv[2] || path.join(__dirname, 'plugin', 'code.js');
+  const bundlePath = process.argv[2] || path.join(__dirname, '..', 'plugin', 'code.js');
   await testContainerAndUndo(bundlePath);
   await testSectionMirror(bundlePath);
   await testLegacyPages(bundlePath);

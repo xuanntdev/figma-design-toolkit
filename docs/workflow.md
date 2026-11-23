@@ -9,7 +9,7 @@ Kit không áp đặt một cách làm. Mỗi dự án chọn cách dùng trong 
 | Dùng khi | Vẽ lại màn đang chạy lên Figma rồi **designer sửa ngay trên đó** | Màn đang chạy chỉ để **tham chiếu**; kit sinh thêm màn mới/phương án vào khu **Cải tiến** |
 | Khu ghi | **Hiện tại** (`target: "current"`) | **Cải tiến** (`target: "improved"`, `improved: true`) |
 | Bố cục | `layout: "sections"`: cây Section, chọn cấp bằng `sectionLevels` (vd `["group","flow"]`) | `layout: "grid"`: lưới/container, hoặc gương Section của Hiện tại |
-| Đồng bộ | `sync: "merge"`: không đổi thì bỏ qua, giữ bản designer sửa, xung đột giải trong plugin | `sync: "replace"`: thay bản nháp, chỉ giữ bản đã chọn/vẽ tay |
+| Đồng bộ | `sync: "merge"`: không đổi thì bỏ qua, giữ bản designer sửa, xung đột giải trong plugin | `sync: "replace"`: thay bản nháp còn nguyên, giữ bản đã chọn/vẽ tay/sửa tay |
 | Hay đi kèm | `preview: true`, `cleanup: true`, `improved: false`, `screenLabels: "name"` | mặc định là đủ; thêm `screenLabels` nếu cần nhãn trên canvas |
 
 ```json
@@ -34,7 +34,7 @@ Mỗi Frame do plugin tạo được gắn metadata: `screenId` (trùng `stem` t
 
 Khi bấm **Cập nhật**:
 1. Plugin kiểm tra đủ đích đến **trước khi ghi** bất kỳ node nào; sai trang hoặc thiếu nhóm thì dừng và báo lỗi.
-2. Chỉ thay bản nháp `source=ai` chưa duyệt của đúng `screenId + theme` trong `draft-plan.json`; bản `status=chosen` hoặc `source=human` giữ nguyên, bản mới đặt cạnh để so sánh.
+2. Chỉ thay bản nháp `source=ai` còn nguyên của đúng `screenId + theme` trong `draft-plan.json`. Giữ bản đã duyệt, vẽ tay hoặc đã chỉnh, đặt bản mới cạnh để so sánh. Khi thay frame, kit nối lại các liên kết prototype trực tiếp từ layer còn tồn tại và báo lớp cần xử lý nếu việc nối lại bị chặn.
 3. Màn ngoài danh sách và khu không phải `target` không bị đụng tới.
 
 **Chủ đề lấy từ `DRAFT_PLAN.themes`** (vd chỉ `["light"]`): bố cục, nhãn, ô giữ chỗ chỉ dựng cho các chủ đề đó. Không có plan thì kit giữ mặc định light + dark.
@@ -115,7 +115,7 @@ Theo [nguyen-tac.md](nguyen-tac.md) mục 1, màn dựng ra là **instance của
 
 ## 6. Chiều ngược: Figma → repo (AI đọc được Figma đang có gì)
 
-Đồng bộ chính là repo → Figma. Chiều ngược **chỉ đọc** và đi qua plugin: plugin duyệt file Figma đang mở rồi đưa kết quả vào `project/figma-state/`; AI (hoặc người) đọc thư mục đó để biết Figma chứa gì và designer đã sửa gì. Không có lệnh nào ghi ngược vào Figma, không đổi tag/plugin data, không tạo bước hoàn tác (lệnh `readState` được kiểm bằng `verify_state.js`: cây tài liệu không đổi, không `commitUndo`).
+Plugin đọc file Figma đã ghép rồi đưa kết quả vào `project/figma-state/`. Đây là bản đọc để AI hiểu canvas và design system. `pull` chỉ đọc và không tạo bước Undo. Dựng hoặc chỉnh trong file qua [luồng trực tiếp](figma-live.md).
 
 **Bố cục `project/figma-state/`** (mỗi lần kéo thay nguyên khối bằng bản mới):
 
@@ -124,16 +124,13 @@ Theo [nguyen-tac.md](nguyen-tac.md) mục 1, màn dựng ra là **instance của
 | `index.json` | Trang, cây Section (tên, cấp, số màn), mọi khung màn: `screenId`, tên khung, đường dẫn Section, vị trí/kích thước, `status`, `fp`/`srcHash`/`buildHash`, `readAt` (thời điểm đọc, dùng kiểm độ mới) |
 | `screens/<mã màn>.json` | Cây node gọn, mỗi node một dòng: loại, tên, vị trí, bố cục, fill/stroke kèm tên biến, bo góc, chữ + text style + font; INSTANCE chỉ ghi component, variant, property, chữ hiển thị, instance lồng nhau |
 | `tokens.json` | Collection, biến (giá trị đã resolve, alias, scopes, code syntax), text style; thêm mục `repo` (bảng token extension khai ở `linkTokens()`) khi extension có khai, để so |
-| `components.json` | Component set trên trang Token & Component: biến thể, định nghĩa property, mô tả |
+| `components.json` | Component/component set trên các page, có ID, biến thể, định nghĩa property và mô tả |
 
 `status` của khung màn: `untouched` = giống bản plugin dựng (vân tay `fp` khớp), `edited` = designer đã sửa, `handmade` = khung không do plugin tạo, `unknown` = khung bản cũ chưa có vân tay. Khung đã sửa mà chữ khác nguồn repo thì index có `textDiff` (thêm/bớt so với nguồn), và `repoChanged` báo nguồn repo đã đổi từ lần dựng.
 
-**Hai đường đưa trạng thái về repo:**
+Chạy `doctor`, mở plugin trong Figma Desktop và bấm **Kết nối file**, rồi chạy `python design_sync.py pull`. File lớn có thể dùng `--timeout 180`. Cầu nối tự thoát sau 30 phút không có hoạt động.
 
-1. **Cầu nối localhost**: khoá `bridge: {"port": 8787}` trong `design-sync.json`. `init` ghi sẵn khoá này cho dự án mới; dự án cũ (không có khoá) hoặc `"bridge": null` thì tắt: manifest vẫn `allowedDomains: ["none"]` và UI không có mã mạng. Bật thì manifest chỉ cho plugin gọi đúng `http://localhost:<cổng>`. `python design_sync.py serve` chạy máy chủ chỉ nghe `127.0.0.1`, chỉ ghi vào `project/figma-state/`, từ chối Origin/Host lạ và đường dẫn thoát thư mục. Trong plugin bấm **Gửi về repo**.
-2. **Không mạng**: bấm **Xuất trạng thái** (tải một tệp JSON, nút này luôn có), rồi `python design_sync.py import-state <tệp>` giải nén ra cùng bố cục.
-
-**Để AI tự kéo, không cần user bấm:** user để Figma Desktop và cửa sổ plugin mở. Plugin hỏi `GET /pending` trên localhost vài giây một lần (chỉ đọc khi repo đang chờ; máy chủ không chạy thì giãn nhịp dần tới 10 giây), thấy yêu cầu thì đọc và gửi kèm mã yêu cầu. `python design_sync.py pull [--timeout 60]` tạo yêu cầu (tự bật máy chủ nền nếu chưa chạy, nền tự thoát sau 30 phút không có plugin hỏi), chờ đúng mã rồi thoát 0; hết hạn thì thoát khác 0 với "Mở plugin trong Figma Desktop (để cửa sổ plugin mở)". Bài gửi sai/quá hạn mã bị bỏ qua. Giới hạn: plugin Figma chỉ chạy khi cửa sổ của nó còn mở, và đóng ngay khi user chạy plugin khác.
+Cấu hình `"bridge": {"port": 8787}` trong `design-sync.json` được tạo sẵn bởi `init`. Cầu nối đọc qua `127.0.0.1` và ghi snapshot vào `project/figma-state/`. Đặt thêm `"readOnly": true` để chỉ hiện trạng thái kiểm kê trong cùng template popup. `python design_sync.py import-state <tệp>` nạp một snapshot JSON có sẵn mà không cần mở Figma.
 
 **Xem khác biệt:** `python design_sync.py figma-diff [--json]` so `figma-state/` với bản đã commit ở git HEAD (mốc chốt trước) và với nguồn repo: màn sửa tay + đổi gì (chữ, component/variant/property, màu/token, node thêm/bớt), khung vẽ tay không có trong repo, màn plan chưa có trên Figma, token/text style lệch bảng token của extension, component set đổi. Quy trình cho AI (kéo, đọc, hỏi user xử lý từng nhóm thay đổi) ở [ai-prompts.md](ai-prompts.md) mục 4.
 

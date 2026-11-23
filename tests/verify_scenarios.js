@@ -4,7 +4,7 @@
 //  AB: layout=sections + sync=merge cho khu Hiện tại và Cải tiến cạnh nhau; GB: layout=grid + sync=replace, đổi target giữa hai khu.
 // Chạy: node verify_scenarios.js <thư mục chứa A/ B/ AB/ GB/ mỗi cái có code.js>  (verify_release.py dựng).
 const assert = require('node:assert/strict');
-const { boot, all, tag, page, aiFrames, sections, MockNode } = require('./tests/mock-env.js');
+const { boot, all, tag, page, aiFrames, sections, MockNode } = require('./mock-env.js');
 
 const COUNT = 7; // g1-a..e + g2-a..b (plan chỉ chọn 2 nhóm đầu)
 const frameOf = (env, stem) => all(page(env, 'Tính năng')).filter((f) => f.type === 'FRAME' && ['ai', 'human'].includes(tag(f, 'source')) && tag(f, 'screenId') === stem);
@@ -74,12 +74,12 @@ async function scenarioB(dir) {
   const chosen = frameOf(env, 'g1-b')[0];
   chosen.setPluginData('status', 'chosen');
   const preview = await env.ok('previewSync', {});
-  assert.deepEqual([preview.summary.counts.replace, preview.summary.counts.create], [COUNT - 1, 1], 'replace: ô có bản nháp đều được thay (kể cả bản sửa tay, không so vân tay); ô chỉ còn bản đã chọn thì dựng thêm');
+  assert.deepEqual([preview.summary.counts.replace, preview.summary.counts.create], [COUNT - 2, 2], 'Chỉ thay các nháp còn nguyên');
   const second = await env.ok('updateDraft', {});
   assert.equal(second.builtCount, COUNT, 'replace: dựng lại tất cả, không bỏ qua');
-  assert.equal(second.keptProtected, 1, 'Chỉ bản đã chọn được giữ');
+  assert.equal(second.keptProtected, 2, 'Giữ bản sửa tay và bản đã chọn');
   assert.equal(second.editedKept, 0);
-  assert.equal(await env.figma.getNodeByIdAsync(mine.id), null, 'Bản sửa tay mà không đổi tag bị thay (kit gốc)');
+  assert.ok(await env.figma.getNodeByIdAsync(mine.id), 'Bản sửa tay còn nguyên dù chưa đổi tag');
   assert.ok(await env.figma.getNodeByIdAsync(chosen.id), 'Bản status=chosen được giữ');
   assert.equal(frameOf(env, 'g1-b').length, 2, 'Bản mới nằm cạnh bản đã chọn');
   assert.equal(second.cleanup.removed.length, 0, 'cleanup=false: không dọn gì');

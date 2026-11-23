@@ -43,7 +43,6 @@ async function localRunTree(run, targets, plan, batchId) {
   trLayout(root, anchor);
   await stFinish(stExtension());
   stampFile();
-  figma.commitUndo();
   return { proposals, moves, swept, rootId: root.id, notes: trNotes(moves, swept) };
 }
 

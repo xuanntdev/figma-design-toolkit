@@ -39,7 +39,7 @@ function clFrameCount(node) {
 
 // true nếu node (và phần ruột) xoá được; Section được dọn từng con, khung/nhãn của plugin xoá nguyên khối.
 function clPrune(node, st) {
-  if (stIsProtected(node) || !clIsOurs(node)) {
+  if (stIsProtected(node, false) || !clIsOurs(node)) {
     st.kept += clFrameCount(node);
     return false;
   }
@@ -104,11 +104,13 @@ function clDropFromSide(side, themes, res) {
 // Dọn mọi trang có khu Hiện tại. Trả { removed: [tên khu], kept: [{ name, count }], notes: [câu báo cho UI] }.
 async function stCleanup(opts) {
   await stPrepare();
-  const res = { removed: [], kept: [], notes: [] };
+  const res = { removed: [], kept: [], notes: [], pageIds: [] };
   const planThemes = stPlanThemes();
   const dropThemes = planThemes ? CL_THEMES.filter((t) => !planThemes.includes(t)) : [];
   for (const page of figma.root.children) {
+    if (liveProtected().has(page.id)) continue;
     if (!page.children.some((n) => localIsSide(n, 'current', opts.currentName))) continue;
+    res.pageIds.push(page.id);
     for (const side of page.children.slice()) {
       if (!stImprovedOn() && localIsSide(side, 'improved', opts.improvedName)) clDropShell(side, side.name, res);
       else if (dropThemes.length && localIsSide(side, 'current', opts.currentName)) clDropFromSide(side, dropThemes, res);

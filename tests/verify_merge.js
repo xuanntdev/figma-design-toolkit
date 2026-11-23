@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const os = require('node:os');
 const path = require('node:path');
-const { strictNode, markRemoved } = require('./tests/strict-node.js');
+const { strictNode, markRemoved } = require('./strict-node.js');
 
 let seq = 1;
 const BY_ID = new Map();

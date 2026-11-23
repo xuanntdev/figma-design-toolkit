@@ -12,7 +12,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
-from verify_config import SCENARIO_A, tree_plan, verify_gen_plan, verify_options, verify_scenarios
+from tests.verify_config import SCENARIO_A, tree_plan, verify_gen_plan, verify_options, verify_scenarios
+from tests.verify_live import verify_live_cli
 
 PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aLU8AAAAASUVORK5CYII="
 
@@ -44,7 +45,7 @@ def verify_kit(kit: Path, work: Path, packaged: bool) -> None:
     # 4. Kiểm giới hạn kích thước file/hàm + cú pháp Node + kiểm giả lập toàn luồng plugin
     subprocess.run([*cli, "check", "--extension", str(kit / "example"), "--bundle", str(bundle)], cwd=work, check=True)
     subprocess.run([*cli, "check", "--extension", str(kit / "kit_core/plugin/core")], cwd=work, check=True)
-    subprocess.run(["node", str(kit / "verify_plugin.js"), str(bundle)], cwd=work, check=True)
+    subprocess.run(["node", str(kit / "tests/verify_plugin.js"), str(bundle)], cwd=work, check=True)
 
     verify_snapshot_dir(kit, work)
     verify_layout(kit, work)
@@ -53,6 +54,7 @@ def verify_kit(kit: Path, work: Path, packaged: bool) -> None:
     verify_options(kit, work)
     verify_gen_plan(kit, work)
     verify_bridge(kit, work)
+    subprocess.run(["node", str(kit / "tests/verify_live.js"), str(bundle)], cwd=work, check=True)
     verify_project(kit, work)
 
 
@@ -65,7 +67,7 @@ def verify_built_files(work: Path) -> Path:
     ui = (work / "built/ui.html").read_text(encoding="utf-8")
     assert '<html lang="vi">' in ui and "Đồng bộ thiết kế" in ui and "Cập nhật" in ui and "Hoàn tác" in ui
     assert "bridge" not in ui.lower() and "localhost" not in ui.lower() and "fetch(" not in ui, "không khai bridge thì UI không có đường ra mạng"
-    assert "Xuất trạng thái" in ui and "Gửi về repo" not in ui
+    assert 'data-mode="design"' in ui and "Xuất trạng thái" not in ui and "Gửi về repo" not in ui
 
     bundle = work / "built/code.js"
     code_text = bundle.read_text(encoding="utf-8")
@@ -118,10 +120,10 @@ def verify_layout(kit: Path, work: Path) -> None:
     from kit_core import build
 
     build.build([kit / "tests" / "layout-extension"], work / "layout-out", runtime=runtime)
-    subprocess.run(["node", str(kit / "verify_layout.js"), str(work / "layout-out/code.js")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_layout.js"), str(work / "layout-out/code.js")], check=True)
     plan = {"screenIds": ["g1-a"], "themes": ["light"], "replace": True, "groupOrders": {"gx": {"order": 3, "title": "3 · Mới"}}}
     build.build([kit / "tests" / "layout-extension"], work / "cleanup-out", runtime=runtime, plan=plan)
-    subprocess.run(["node", str(kit / "verify_cleanup.js"), str(work / "cleanup-out/code.js")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_cleanup.js"), str(work / "cleanup-out/code.js")], check=True)
     verify_merge(kit, work, runtime)
     verify_tree(kit, work, runtime)
     verify_link(kit, work, runtime)
@@ -143,7 +145,7 @@ def verify_merge(kit: Path, work: Path, runtime: dict) -> None:
     build.build([ext], work / "merge-v1b", runtime=runtime, plan={**plan, "screenIds": ["g1-a", "g1-c"]})
     build.build([ext2], work / "merge-v2", runtime=runtime, plan={**plan, "screenIds": ["g1-b"]})
     bundles = [str(work / name / "code.js") for name in ("merge-v1", "merge-v1b", "merge-v2")]
-    subprocess.run(["node", str(kit / "verify_merge.js"), *bundles], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_merge.js"), *bundles], check=True)
 
 
 def verify_tree(kit: Path, work: Path, runtime: dict) -> None:
@@ -162,7 +164,7 @@ def verify_tree(kit: Path, work: Path, runtime: dict) -> None:
     batch = tree_plan({"g1": "KHU A", "g2": "KHU B", "g3": "KHU A"}, {"g2": f1["g2"]})  # lô chỉ có luồng của nhóm g2
     build.build([ext], work / "tree3", runtime=runtime, plan=batch)
     bundles = [str(work / name / "code.js") for name in ("tree1", "tree2", "tree3")]
-    subprocess.run(["node", str(kit / "verify_tree.js"), *bundles], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_tree.js"), *bundles], check=True)
 
 
 def verify_link(kit: Path, work: Path, runtime: dict) -> None:
@@ -183,9 +185,9 @@ def verify_link(kit: Path, work: Path, runtime: dict) -> None:
     for name in variants:
         build.build([work / f"link-{name}-ext"], work / f"link-{name}", runtime=runtime, plan=plan)
     bundles = [str(work / name / "code.js") for name in ("link-full", "link-tokens-only", "link-none")]
-    subprocess.run(["node", str(kit / "verify_link.js"), "merge", *bundles], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_link.js"), "merge", *bundles], check=True)
     build.build([ext], work / "link-replace", runtime=config.runtime({}), plan=plan)
-    subprocess.run(["node", str(kit / "verify_link.js"), "replace", str(work / "link-replace/code.js")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_link.js"), "replace", str(work / "link-replace/code.js")], check=True)
 
 
 def verify_link_sample(kit: Path, work: Path) -> None:
@@ -202,16 +204,16 @@ def verify_link_sample(kit: Path, work: Path) -> None:
     plan = {"screenIds": ["sample-danh-sach", "sample-chi-tiet"], "themes": ["light"], "replace": True}
     dirs = [kit / "capture/extension", kit / "capture/link-example", data]
     build.build(dirs, work / "link-sample", runtime=config.runtime({"target": "current"}), plan=plan)
-    subprocess.run(["node", str(kit / "verify_link_sample.js"), "example", str(work / "link-sample/code.js")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_link_sample.js"), "example", str(work / "link-sample/code.js")], check=True)
     build.build(dirs[:1] + [data], work / "link-sample-bare", runtime=config.runtime({"target": "current"}), plan=plan)
-    subprocess.run(["node", str(kit / "verify_link_sample.js"), "bare", str(work / "link-sample-bare/code.js")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_link_sample.js"), "bare", str(work / "link-sample-bare/code.js")], check=True)
     found = subprocess.run(["node", str(kit / "capture/find-repeats.mjs"), "--dir", str(kit / "tests/link-sample"), "--min-screens", "2"], capture_output=True, text=True)
     assert found.returncode == 0 and "section.card" in found.stdout and "header" in found.stdout, found.stdout + found.stderr
 
 
 def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:
     # 4f. verify_project.js: dựng hết màn trong plan (đủ/thiếu font), chạy lại ổn định; extension thử có thêm hook buildTokens
-    subprocess.run(["node", str(kit / "verify_project.js"), str(example_bundle)], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_project.js"), str(example_bundle)], check=True)
     from kit_core import build
 
     ext = kit / "tests" / "token-extension"
@@ -221,7 +223,7 @@ def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:
     for name, options in (("default", {}), ("merge-update", {"sync": "merge", "tokens": "update"}), ("off", {"tokens": "off"})):
         out = work / f"token-{name}"
         build.build([ext], out, runtime=config.runtime(options), plan=plan)
-        subprocess.run(["node", str(kit / "verify_project.js"), str(out / "code.js")], check=True)
+        subprocess.run(["node", str(kit / "tests/verify_project.js"), str(out / "code.js")], check=True)
 
 
 def verify_bridge(kit: Path, work: Path) -> None:
@@ -232,7 +234,8 @@ def verify_bridge(kit: Path, work: Path) -> None:
     runtime = config.runtime({"frame": {"width": 100, "height": 100, "perRow": 3}, "target": "current", "improved": False})
     assert "bridge" not in runtime and config.runtime({"bridge": {"port": 9123}})["bridge"] == {"port": 9123}
     assert "bridge" not in config.runtime({"bridge": None}) and "bridge" not in config.runtime({"bridge": False})
-    for bad in ({"bridge": 1}, {"bridge": {"port": 80}}, {"bridge": {"port": "8787"}}, {"bridge": {"host": "0.0.0.0"}}):
+    for bad in ({"bridge": 1}, {"bridge": {"port": 80}}, {"bridge": {"port": "8787"}}, {"bridge": {"host": "0.0.0.0"}},
+                {"readOnly": True}, {"readOnly": "true", "bridge": {"port": 9123}}):
         try:
             config.validate(bad, Path("design-sync.json"))
         except ValueError:
@@ -240,18 +243,24 @@ def verify_bridge(kit: Path, work: Path) -> None:
         raise AssertionError(f"Cấu hình bridge sai phải bị từ chối: {bad}")
     build.build([kit / "tests" / "link-extension"], work / "state-off", runtime=runtime, plan=plan)
     build.build([kit / "tests" / "link-extension"], work / "state-on", runtime={**runtime, "bridge": {"port": 9123}}, plan=plan)
+    audit = config.runtime({"readOnly": True, "bridge": {"port": 9123}})
+    build.build([], work / "state-audit", runtime=audit)
     off = json.loads((work / "state-off/manifest.json").read_text(encoding="utf-8"))
     on = json.loads((work / "state-on/manifest.json").read_text(encoding="utf-8"))
     assert off["networkAccess"] == {"allowedDomains": ["none"]}
     assert on["networkAccess"]["allowedDomains"] == ["http://localhost:9123"] and on["networkAccess"]["reasoning"], on["networkAccess"]
     ui_off = (work / "state-off/ui.html").read_text(encoding="utf-8")
     ui_on = (work / "state-on/ui.html").read_text(encoding="utf-8")
-    assert "Gửi về repo" in ui_on and "http://localhost:9123" in ui_on and "__BRIDGE_PORT__" not in ui_on and "/pending" in ui_on
+    assert "Gửi về repo" not in ui_on and "Xuất trạng thái" not in ui_on
+    assert "http://localhost:9123" in ui_on and "__BRIDGE_PORT__" not in ui_on and "/pending" in ui_on
     assert "Gửi về repo" not in ui_off and "localhost" not in ui_off and "fetch(" not in ui_off
+    ui_audit = (work / "state-audit/ui.html").read_text(encoding="utf-8")
+    assert 'data-mode="read"' in ui_audit and "/pending" in ui_audit and "function runApply()" not in ui_audit
     state_out = work / "state-out"
-    subprocess.run(["node", str(kit / "verify_state.js"), str(work / "state-off/code.js")], check=True, env={**os.environ, "STATE_OUT_DIR": str(state_out)})
-    subprocess.run(["node", str(kit / "verify_state.js"), str(work / "state-on/code.js")], check=True)
-    subprocess.run([sys.executable, "-B", str(kit / "verify_bridge.py"), str(state_out)], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-off/code.js")], check=True, env={**os.environ, "STATE_OUT_DIR": str(state_out)})
+    subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-on/code.js")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-audit/code.js"), "--read-only"], check=True)
+    subprocess.run([sys.executable, "-B", str(kit / "tests/verify_bridge.py"), str(state_out)], check=True)
 
 
 def verify_project(kit: Path, work: Path) -> None:
@@ -274,10 +283,10 @@ def verify_project(kit: Path, work: Path) -> None:
     subprocess.run([*cli, "build"], cwd=work, check=True)
     assert_project_build(project / "dist", "Team Web", "team-web", 1280, "current")
     subprocess.run([*cli, "check"], cwd=team_kit, check=True)
-    subprocess.run(["node", str(team_kit / "verify_plugin.js"), str(project / "dist/code.js")], cwd=work, check=True)
-    # 6b. init bật sẵn bridge: manifest chỉ cho đúng http://localhost:8787, UI có nút gửi về repo
+    subprocess.run(["node", str(team_kit / "tests/verify_plugin.js"), str(project / "dist/code.js")], cwd=work, check=True)
+    # 6b. init bật sẵn bridge: manifest chỉ cho đúng http://localhost:8787, UI tự nhận yêu cầu đọc.
     assert json.loads((project / "dist/manifest.json").read_text(encoding="utf-8"))["networkAccess"]["allowedDomains"] == ["http://localhost:8787"]
-    assert "Gửi về repo" in (project / "dist/ui.html").read_text(encoding="utf-8")
+    verify_live_cli(team_kit)
     # 6c. Bỏ khoá bridge (hoặc đặt null) = tắt: manifest ["none"], UI không có mã mạng, pull từ chối và không mở cổng nào
     for explicit_null in (False, True):
         no_bridge = {k: v for k, v in cfg.items() if k != "bridge"}
@@ -297,6 +306,14 @@ def verify_project(kit: Path, work: Path) -> None:
     assert "http://localhost:9456" in (project / "dist/ui.html").read_text(encoding="utf-8")
     ignored = (team_kit / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "/project/" not in ignored and "/project/dist/" in ignored, "project/ phải commit được, project/dist/ thì không"
+    external_project = project.rename(work / "team-builder-project")
+    verify_live_cli(team_kit, external_project)
+    subprocess.run([*cli, "init", "--name", "Figma Live", "--empty"], cwd=team_kit, check=True)
+    subprocess.run([*cli, "build"], cwd=team_kit, check=True)
+    assert json.loads((project / "draft-plan.json").read_text(encoding="utf-8"))["screenIds"] == []
+    assert not list((project / "extension").glob("*.js")), "Ghép file hiện có không cần builder mẫu"
+    subprocess.run(["node", str(team_kit / "tests/verify_live.js"), str(project / "dist/code.js"), "--empty"], cwd=work, check=True)
+    assert (team_kit / ".agents/skills/figma-design/SKILL.md").is_file()
 
 
 def assert_project_build(out: Path, name: str, plugin_id: str, width: int, target: str) -> None:

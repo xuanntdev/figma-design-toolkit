@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
-const { MockNode, boot } = require('./tests/link-env.js');
+const { MockNode, boot } = require('./link-env.js');
 
 const ARGS = { screenIds: ['g1-a', 'g1-b'], themes: ['light'], target: 'current' };
 const all = (node) => node.children.flatMap((c) => [c, ...all(c)]);
@@ -86,7 +86,7 @@ function checkTokens(payload) {
 }
 
 async function main(bundleArg) {
-  const bundle = path.resolve(bundleArg || path.join(__dirname, 'built/code.js'));
+  const bundle = path.resolve(bundleArg || path.join(__dirname, '..', 'built/code.js'));
   const env = boot(bundle);
   let undo = 0;
   env.figma.commitUndo = () => { undo += 1; };
@@ -149,4 +149,30 @@ async function main(bundleArg) {
 }
 
 module.exports = main;
-if (require.main === module) main(process.argv[2]).catch((e) => { console.error(e); process.exit(1); });
+
+async function verifyReadOnly(bundle) {
+  const env = boot(bundle);
+  const frame = new MockNode('FRAME');
+  env.root.children[0].appendChild(frame);
+  frame.exportAsync = async ({ format }) => {
+    assert.equal(format, 'PNG');
+    return Buffer.from('png-test');
+  };
+  env.figma.base64Encode = (bytes) => bytes.toString('base64');
+  const before = snapshot(env.root);
+  const state = await read(env);
+  assert.equal(rowsOf(state)[0].id, frame.id);
+  env.figma.currentPage.selection = [frame];
+  assert.equal((await env.call('exportPng', {})).base64, Buffer.from('png-test').toString('base64'));
+  await assert.rejects(() => env.call('exportPng', { scale: 0 }), /Scale xuất PNG/);
+  for (const command of ['updateDraft', 'ensureLayout', 'rollbackDraft']) {
+    await assert.rejects(() => env.call(command, {}), /chỉ đọc trạng thái Figma/);
+  }
+  assert.equal(snapshot(env.root), before);
+  console.log('verify_state.js: kiểm kê đọc được trạng thái và từ chối lệnh ghi');
+}
+
+if (require.main === module) {
+  const check = process.argv.includes('--read-only') ? verifyReadOnly : main;
+  check(process.argv[2]).catch((e) => { console.error(e); process.exit(1); });
+}

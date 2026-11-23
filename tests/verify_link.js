@@ -2,7 +2,7 @@
 // Chạy: node verify_link.js merge <đủ luật + token> <chỉ token> <không khai gì>   (sync=merge, target=current: instance, token, vân tay, sửa tay)
 //       node verify_link.js replace <đủ luật + token>                              (sync=replace, target=improved: dựng lại không nhân đôi)
 const assert = require('node:assert/strict');
-const { MockNode, boot, all, framesOf } = require('./tests/link-env.js');
+const { MockNode, boot, all, framesOf } = require('./link-env.js');
 
 const ARGS = { screenIds: ['g1-a', 'g1-b'], themes: ['light'], target: 'current' };
 const byId = (reg) => { const m = {}; reg.sets.forEach((s) => { m[s.id] = s; s.children.forEach((c) => { m[c.id] = c; }); }); return m; };

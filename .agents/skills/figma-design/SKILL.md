@@ -1,0 +1,24 @@
+---
+name: figma-design
+description: Set up this Figma Design Toolkit, read the connected Figma selection and design system, create or edit native screens, stage bulk edits, and manage toolkit write protection on pages.
+---
+
+# Thiết kế trong file Figma đã ghép
+
+## Xác định dự án
+
+- Đọc `AGENTS.md` của repo người dùng đang làm. Dùng thư mục dự án đã khai báo ở đó. Khi repo dự án có `design-sync.json` ở gốc, dùng `--project-dir .`. Nếu repo chứa toolkit ở gốc và cấu hình ở `project/design-sync.json`, dùng mặc định của CLI. Repo có thư mục như `figma/` truyền chính thư mục đó bằng `--project-dir` trước lệnh con.
+- Với repo chỉ có kit, chạy `python design_sync.py init --name "<tên dự án>" --empty`, `build` và `doctor`. Giữ cấu hình khi dự án đã được khởi tạo. Cách thiết lập repo riêng có ở [hướng dẫn setup](../../../docs/setup.md).
+- Giữ một plugin cho mỗi dự án. Dùng cùng ID và đường dẫn manifest cho việc ghép file, dựng màn và duyệt lô. Khi đổi kế hoạch builder, chạy `build --plan <tệp>` và mở lại plugin đã import.
+
+## Đọc thiết kế
+
+- Chạy `doctor` để lấy đường dẫn manifest và trạng thái ghép file. Khi cần thao tác Figma Desktop, hướng dẫn người dùng mở đúng file, chạy plugin và bấm **Kết nối file**. Kiểm lại tên file và phiên bằng CLI.
+- Khi BA nói “màn này” hoặc “nút này”, đọc `selection` mới rồi dùng `tree <node-id> --session <id>` nếu cần. Nếu không có selection hoặc có nhiều đích không thể suy ra, hỏi đích cụ thể. Khi cần hiểu file, chạy `pull` và đọc index, screens, components và tokens trong `figma-state/` của dự án. Đối chiếu phiên kết nối với `documentSession` trước khi dùng ID từ bản xuất để ghi.
+- Khi cần đọc giao diện Figma bằng ảnh, dùng `export-png <node-id> --session <id> --out <ảnh-tạm>`. Đọc thêm cây layer khi cần style, binding và kích thước.
+
+## Dựng và sửa
+
+- Không gửi ảnh thì tham chiếu màn cùng luồng và dùng lại style, token và component của Figma. Ảnh gần giống một màn hiện có thì nhân bản màn làm nền và sửa phần khác biệt. Với ảnh khác rõ, dùng hình ảnh làm yêu cầu về bố cục và hình thức, dựng ra layer có thể chỉnh và dùng lại thành phần phù hợp. Dùng bản xuất Figma đã đọc khi chuẩn bị offline. Ảnh local/capture dùng khi người dùng chỉ định.
+- Ghi ngay khi plugin đang kết nối, page cho ghi và yêu cầu xác định được một item/màn hoặc tạo màn. Đọc lại đích sau khi ghi. Tạo màn với `create`, sửa tại chỗ với `edit`. Tài liệu JSON ở [Figma trực tiếp](../../../docs/figma-live.md).
+- Trước khi sửa component hoặc token chung, xem `impact`. Khi sửa hàng loạt, dùng `stage`, đưa người dùng danh sách cụ thể, rồi chờ họ bấm **Cập nhật** trong Figma. Báo kết quả qua `status` khi cần. Nếu chạm page bị cấm, báo đích và chỉ gỡ cấm khi người dùng yêu cầu.

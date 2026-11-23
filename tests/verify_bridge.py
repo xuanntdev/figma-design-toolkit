@@ -5,6 +5,7 @@ Chạy: python verify_bridge.py [thư mục state-out do verify_state.js ghi (ST
 
 import http.client
 import json
+import shutil
 import socket
 import subprocess
 import sys
@@ -13,7 +14,7 @@ import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-KIT = Path(__file__).resolve().parent
+KIT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(KIT))
 from kit_core import bridge, bridge_client, figma_diff, figma_diff_render  # noqa: E402
 
@@ -99,13 +100,14 @@ def fake_plugin(port: int, stop: threading.Event, answer_ids: list, delay: float
     while not stop.is_set():
         try:
             pending = http_call(port, "GET", "/pending")[2]["pending"]
+            if pending and pending["id"] not in answer_ids:
+                if stop.wait(delay):
+                    return
+                answer_ids.append(pending["id"])
+                http_call(port, "POST", "/state", {**GOOD, "requestId": pending["id"]}, {"Origin": "null"})
         except OSError:  # máy chủ vừa tắt lúc dọn dẹp
             return
-        if pending and pending["id"] not in answer_ids:
-            answer_ids.append(pending["id"])
-            time.sleep(delay)
-            http_call(port, "POST", "/state", {**GOOD, "requestId": pending["id"]}, {"Origin": "null"})
-        time.sleep(0.1)
+        stop.wait(0.1)
 
 
 def check_queue(root: Path) -> None:
@@ -115,7 +117,7 @@ def check_queue(root: Path) -> None:
     try:
         # Không có plugin: pull hết hạn gọn gàng, báo mở plugin, và yêu cầu bị huỷ nên bài đăng muộn bị bỏ qua.
         started = time.time()
-        raises(lambda: bridge_client.pull(port, KIT / "design_sync.py", state, timeout=1), "Mở plugin trong Figma Desktop (để cửa sổ plugin mở)")
+        raises(lambda: bridge_client.pull(port, KIT / "design_sync.py", state, timeout=1), bridge_client.OPEN_PLUGIN_HINT)
         assert time.time() - started < 5 and not state.exists()
         stale_id = next(iter(server.queue.items))
         code, _, body = http_call(port, "POST", "/state", {**GOOD, "requestId": stale_id})
@@ -145,6 +147,9 @@ def check_queue(root: Path) -> None:
 
 def check_autostart(root: Path) -> None:
     """pull tự bật máy chủ nền khi chưa chạy; máy chủ tự thoát sau thời gian rảnh."""
+    standalone = root / "standalone"
+    shutil.copytree(KIT / "kit_core", standalone / "kit_core", ignore=shutil.ignore_patterns("__pycache__"))
+    script = shutil.copyfile(KIT / "design_sync.py", standalone / "design_sync.py")
     port, state = free_port(), root / "auto-state"
     bridge_client.AUTO_IDLE_MINUTES = 0.05
     stop, answered = threading.Event(), []
@@ -157,7 +162,7 @@ def check_autostart(root: Path) -> None:
                 time.sleep(0.1)
         plugin = threading.Thread(target=late_plugin, daemon=True)
         plugin.start()
-        summary = bridge_client.pull(port, KIT / "design_sync.py", state, timeout=20)
+        summary = bridge_client.pull(port, script, state, timeout=20)
         assert summary["screens"] == 1 and (state / "index.json").is_file()
         stop.set()
         for _ in range(60):

@@ -40,11 +40,14 @@ function localSettings() {
 }
 
 function localCatalog() {
+  const hasBuilder = typeof DESIGN_EXTENSION !== 'undefined';
+  const groups = hasBuilder ? localAllGroups() : [];
   return {
     version: PLUGIN_VERSION,
+    hasBuilder,
     settings: localSettings(),
-    defaultPlan: localDefaultPlan(),
-    groups: localAllGroups().map((g) => ({
+    defaultPlan: hasBuilder ? localDefaultPlan() : {},
+    groups: groups.map((g) => ({
       id: g.id, title: g.title, subtitle: g.subtitle,
       screens: g.screens.map((s) => ({ id: s.id, title: s.title })),
     })),
@@ -135,6 +138,7 @@ function localPlaceInSection(improvedSide, target, replace, batchId) {
       theme: target.theme, frameId: same[0].id, reused: true, keptProtected: kept.length,
     };
   }
+  const replacedIds = drafts.map((n) => n.id);
   drafts.forEach((n) => n.remove());
   const frame = stBuildFrame(target.screen.raw, target.theme);
   group.appendChild(frame);
@@ -144,7 +148,7 @@ function localPlaceInSection(improvedSide, target, replace, batchId) {
   stTag(frame, { screenId: target.screen.id, theme: target.theme, source: 'ai', status: 'draft', variant: kept.length, batchId });
   return {
     groupId: target.group.id, groupTitle: target.group.title, screenId: target.screen.id,
-    theme: target.theme, frameId: frame.id, reused: false, replaced: drafts.length, keptProtected: kept.length,
+    theme: target.theme, frameId: frame.id, reused: false, replaced: drafts.length, keptProtected: kept.length, replacedIds,
   };
 }
 
@@ -165,7 +169,6 @@ async function localRunContainer(plan, targets, batchId, side) {
   await stFinish(ext);
   stampFile();
   await cmdEnsureLayout(plan);
-  figma.commitUndo();
   return proposals;
 }
 
@@ -184,7 +187,6 @@ async function localRunSection(page, sides, targets, plan, batchId) {
   });
   await stFinish(stExtension());
   stampFile();
-  figma.commitUndo();
   return proposals;
 }
 
@@ -223,17 +225,30 @@ async function cmdUpdateDraft(args) {
   assertCanWrite(args);
   await figma.loadAllPagesAsync();
   const run = localResolveRun(args);
+  const hasCanvas = run.sectionMode || (run.target === 'current' && stLayoutTree());
+  const plannedPage = (hasCanvas && run.page) || stFindPage(run.opts.pageFeatures);
+  liveAssertPage(plannedPage);
+  if (liveProtected().has(figma.currentPage.id) && stCleanupOn()) {
+    const dest = run.page || await stEnsurePage(run.opts.pageFeatures);
+    await figma.setCurrentPageAsync(dest);
+  }
   stResetEdited();
+  const sources = prototypeSources(run.targets);
   const cleanup = stCleanupOn() ? await stCleanup(run.opts) : { removed: [], kept: [], notes: [] };
   const batchId = 'batch-' + Date.now();
   const { proposals, mode, extra } = await localRunMode(run, batchId);
+  const prototype = await prototypeRestore(sources, proposals);
+  figma.commitUndo();
   const createdIds = proposals.filter((p) => !p.reused).map((p) => p.frameId);
   const groups = localSummarizeGroups(proposals);
   const moves = extra.moves || [];
-  if (extra.notes) cleanup.notes.push(...extra.notes);
-  if (createdIds.length || moves.length) LOCAL_LAST_BATCH = { batchId, frameIds: createdIds, groups, moves, rootId: extra.rootId };
+  cleanup.notes.push(...(extra.notes || []), ...prototype.issues);
+  if (createdIds.length || moves.length) LOCAL_LAST_BATCH = {
+    batchId, frameIds: createdIds, groups, moves, rootId: extra.rootId,
+    pageIds: [plannedPage?.id || stFindPage(run.opts.pageFeatures)?.id, ...(cleanup.pageIds || []), ...prototype.pageIds],
+  };
   return {
-    mode, target: run.target, cleanup, editedKept: stEditedCount(),
+    mode, target: run.target, cleanup, prototype, editedKept: stEditedCount(),
     proposals, groups, builtCount: createdIds.length, merge: mgSummarize(proposals),
     movedCount: moves.filter((m) => m.frame).length,
     reusedCount: proposals.filter((p) => p.reused).length,
@@ -247,6 +262,7 @@ async function cmdRollbackDraft() {
   if (!batch || !(batch.frameIds.length || (batch.moves || []).length)) {
     throw new Error('Chưa có lượt cập nhật nào trong phiên này để hoàn tác.');
   }
+  if ((batch.pageIds || []).some((id) => liveProtected().has(id))) throw new Error('Lượt này có page hiện bị cấm ghi.');
   LOCAL_LAST_BATCH = null;
   if (typeof figma.triggerUndo === 'function') {
     figma.triggerUndo();

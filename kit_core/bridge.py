@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from kit_core.live_bridge import LiveSession
+
 STATE_DIRNAME = "figma-state"
 STATE_KIND = "figma-state"
 STATE_VERSION = 1
@@ -96,10 +98,16 @@ def write_state(state_dir: Path, payload: dict, via: str = "bridge") -> dict:
             target.write_text(dump_file(rel, content), encoding="utf-8")
         if state_dir.exists():
             state_dir.rename(old)
-        tmp.rename(state_dir)
+        try:
+            tmp.rename(state_dir)
+        except OSError:
+            if old.exists() and not state_dir.exists():
+                old.rename(state_dir)
+            raise
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-        shutil.rmtree(old, ignore_errors=True)
+        if state_dir.exists():
+            shutil.rmtree(old, ignore_errors=True)
     return summarize(index)
 
 
@@ -147,12 +155,13 @@ class Queue:
             del self.items[rid]
 
 
-def make_server(state_dir: Path, port: int, host: str = LOOPBACK) -> ThreadingHTTPServer:
+def make_server(state_dir: Path, port: int, host: str = LOOPBACK, key: str | None = None) -> ThreadingHTTPServer:
     if host != LOOPBACK:
         raise ValueError(f"Cầu nối chỉ được lắng nghe {LOOPBACK}, không nhận {host!r}.")
     server = ThreadingHTTPServer((host, port), Handler)
     server.state_dir = Path(state_dir)
     server.queue = Queue()
+    server.live = LiveSession(key, lambda payload: write_state(server.state_dir, payload)) if key else None
     return server
 
 
@@ -167,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
-        for key, value in (("Allow-Origin", "*"), ("Allow-Methods", "GET, POST, OPTIONS"), ("Allow-Headers", "Content-Type"), ("Allow-Private-Network", "true"), ("Max-Age", "600")):
+        for key, value in (("Allow-Origin", "*"), ("Allow-Methods", "GET, POST, OPTIONS"), ("Allow-Headers", "Content-Type, X-Design-Sync-Key"), ("Allow-Private-Network", "true"), ("Max-Age", "600")):
             self.send_header(f"Access-Control-{key}", value)
         self.end_headers()
         self.wfile.write(data)
@@ -182,6 +191,11 @@ class Handler(BaseHTTPRequestHandler):
         if not self._allowed():
             return self._send(403, {"ok": False, "error": "Origin/Host không được phép."})
         try:
+            parts = self.path.split("?", 1)[0].strip("/").split("/")
+            if parts[0] == "live" and self.server.live:
+                return self.server.live.route(self, method, parts[1:])
+            if self.server.live and parts[0] not in ("", "status"):
+                return self._send(403, {"error": "Dùng cầu nối đã ghép của dự án."})
             handler = getattr(self, f"_{method}_" + (self.path.split("?")[0].strip("/").split("/")[0] or "status"), None)
             if handler is None:
                 return self._send(404, {"ok": False, "error": "Không có đường dẫn này."})
@@ -214,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
     def _get_status(self) -> None:
         q = self.server.queue
         age = q.plugin_age()
-        self._send(200, {"ok": True, "bridge": STATE_KIND, "pluginSeenAgo": None if age is None else round(age, 1), "last": q.last})
+        self._send(200, {"ok": True, "bridge": STATE_KIND, "paired": self.server.live is not None, "pluginSeenAgo": None if age is None else round(age, 1), "last": q.last})
 
     def _get_pending(self) -> None:
         rid = self.server.queue.pending()
@@ -249,9 +263,9 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, {"ok": True, "summary": summary})
 
 
-def serve(state_dir: Path, port: int, idle_minutes: float | None = None) -> None:
+def serve(state_dir: Path, port: int, idle_minutes: float | None = None, key: str | None = None) -> None:
     """Chạy cho tới Ctrl+C (hoặc sau idle_minutes không có yêu cầu nào nếu được đặt)."""
-    server = make_server(state_dir, port)
+    server = make_server(state_dir, port, key=key)
     print(f"Cầu nối nghe tại http://{LOOPBACK}:{server.server_address[1]} · ghi vào {Path(state_dir).resolve()} · Ctrl+C để dừng", flush=True)
     if idle_minutes:
         threading.Thread(target=_idle_watch, args=(server, idle_minutes * 60), daemon=True).start()
@@ -269,6 +283,8 @@ def _idle_watch(server: ThreadingHTTPServer, limit: float) -> None:
         time.sleep(5)
         q = server.queue
         age = q.plugin_age()
+        if server.live and server.live.status()["session"]:
+            q.activity = time.time()
         quiet = min(time.time() - q.activity, age if age is not None else limit + 1)
         if quiet > limit:
             server.shutdown()

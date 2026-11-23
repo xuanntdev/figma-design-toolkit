@@ -1,8 +1,8 @@
 // Từng tuỳ chọn của cây Section và bố cục (Figma giả nghiêm ngặt, bundle dựng từ tests/layout-extension): sectionLevels, collapseSingleFlow,
 // sectionFills, sortGroups. Plan: nhóm 1 có 2 luồng, nhóm 2 một luồng, nhóm 3 ngoài lô. Chạy: node verify_options.js <thư mục bundle>.
 const assert = require('node:assert/strict');
-const { boot, all, tag, page, aiFrames, sections } = require('./tests/mock-env.js');
-const U = require('./tests/tree-util.js');
+const { boot, all, tag, page, aiFrames, sections } = require('./mock-env.js');
+const U = require('./tree-util.js');
 
 const names = (list) => list.map((n) => n.name).sort();
 const parentsOf = (pg, stem) => aiFrames(pg).filter((f) => tag(f, 'screenId') === stem).map((f) => f.parent);
