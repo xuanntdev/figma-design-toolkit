@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --canvas: #F4F6FA;
+    --surface: #FFFFFF;
+    --line: #E6EAF0;
+    --ink: #0F172A;
+    --muted: #475569;
+    --accent: #2563EB;
+    --accent-deep: #1D4ED8;
+    --danger: #C62F26;
+    --success: #166534;
+    --success-soft: #E8F7EC;
+    --warn: #8A4300;
+    --warn-soft: #FFF0E5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    display: flex;
+    flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--canvas);
+    color: var(--ink);
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; flex-shrink: 0; }
+  .content {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 10px 14px;
+    margin-bottom: 14px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+  }
+  .row { padding: 8px 0; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .row-t { font-weight: 600; font-size: 12.5px; color: var(--ink); }
+  .row-d { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .pill { flex-shrink: 0; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
+  .pill-ok { background: var(--success-soft); color: var(--success); }
+  .pill-undo { background: var(--warn-soft); color: var(--warn); }
+  .actions { display: flex; gap: 8px; flex-shrink: 0; }
+  button {
+    border: none;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { flex: 1; background: var(--accent); color: #FFFFFF; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-deep); }
+  .btn-secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+  .btn-secondary:hover:not(:disabled) { background: #F8FAFC; }
+  .prog { margin-top: 12px; display: none; }
+  .prog.on { display: block; }
+  .track { height: 5px; background: #E2E8F0; border-radius: 999px; overflow: hidden; margin-bottom: 8px; }
+  .fill { height: 100%; width: 0%; background: var(--accent); border-radius: 999px; transition: width 0.2s; }
+  .st { margin-top: 8px; font-size: 12px; color: var(--muted); word-break: break-word; }
+  .st.ok { color: var(--success); font-weight: 600; }
+  .st.err { color: var(--danger); font-weight: 600; }
+</style>
+</head>
+<body>
+  <h1>Đồng bộ thiết kế</h1>
+
+  <div id="aiContent" class="content">
+    <div class="row"><div class="row-t">Đang tải…</div></div>
+  </div>
+
+  <div class="actions">
+    <button id="btnUpdate" class="btn-primary">Cập nhật</button>
+    <button id="btnRollback" class="btn-secondary" disabled>Hoàn tác</button>
+  </div>
+
+  <div id="prog" class="prog">
+    <div class="track"><div id="fill" class="fill"></div></div>
+  </div>
+  <div id="st" class="st" aria-live="polite"></div>
+
+  <script>
+    const btnUpdate = document.getElementById('btnUpdate');
+    const btnRollback = document.getElementById('btnRollback');
+    const prog = document.getElementById('prog');
+    const fill = document.getElementById('fill');
+    const st = document.getElementById('st');
+    const aiContent = document.getElementById('aiContent');
+
+    let seq = 0;
+    let canRollback = false;
+    let cachedCat = null;
+    const waiters = {};
+
+    function setStatus(text, kind) {
+      st.className = kind === 'err' ? 'st err' : (kind === 'ok' ? 'st ok' : 'st');
+      st.textContent = text;
+    }
+
+    function callMain(name, args) {
+      seq += 1;
+      const id = 'ui-' + seq;
+      return new Promise((resolve, reject) => {
+        waiters[id] = (res) => (res.ok ? resolve(res.value) : reject(new Error(res.error || 'Lỗi không xác định')));
+        parent.postMessage({ pluginMessage: { type: 'PLUGIN_CMD', cmd: { id, name, args: args || {} } } }, '*');
+      });
+    }
+
+    function formatThemes(themes) {
+      if (!themes || !themes.length) return '';
+      const hasL = themes.includes('light');
+      const hasD = themes.includes('dark');
+      if (hasL && hasD) return 'Sáng & Tối';
+      return hasD ? 'Tối' : 'Sáng';
+    }
+
+    function renderRows(rows) {
+      aiContent.innerHTML = '';
+      if (!rows.length) {
+        const r = document.createElement('div');
+        r.className = 'row';
+        r.innerHTML = '<div class="row-t">Không có mục cần cập nhật.</div>';
+        aiContent.appendChild(r);
+        return;
+      }
+      for (const item of rows) {
+        const r = document.createElement('div');
+        r.className = 'row';
+        const h = document.createElement('div');
+        h.className = 'row-h';
+        const t = document.createElement('div');
+        t.className = 'row-t';
+        t.textContent = item.title || '';
+        h.appendChild(t);
+        if (item.badge) {
+          const b = document.createElement('span');
+          b.className = 'pill ' + (item.badgeKind === 'undo' ? 'pill-undo' : 'pill-ok');
+          b.textContent = item.badge;
+          h.appendChild(b);
+        }
+        r.appendChild(h);
+        if (item.desc) {
+          const d = document.createElement('div');
+          d.className = 'row-d';
+          d.textContent = item.desc;
+          r.appendChild(d);
+        }
+        aiContent.appendChild(r);
+      }
+    }
+
+    function renderPlan(cat) {
+      const plan = (cat && cat.defaultPlan) || {};
+      let rows = Array.isArray(plan.items) ? plan.items : null;
+      if (!rows) {
+        const wanted = new Set(plan.screenIds || []);
+        rows = [];
+        for (const g of (cat && cat.groups) || []) {
+          const matched = g.screens.filter((s) => wanted.has(s.id));
+          if (!matched.length) continue;
+          rows.push({ title: g.title, desc: matched.map((s) => s.title).join(' · ') });
+        }
+      }
+      renderRows(rows.map((it) => (typeof it === 'string' ? { title: it } : it)));
+    }
+
+    function renderSyncResult(groups, mode) {
+      if (!groups || !groups.length) return;
+      const isUndo = mode === 'undo';
+      const rows = groups.map((g) => {
+        const parts = [];
+        const themeTxt = formatThemes(g.themes);
+        if (isUndo) {
+          parts.push('Đã gỡ ' + g.built + ' khung nháp' + (themeTxt ? ' (' + themeTxt + ')' : ''));
+        } else {
+          parts.push('Đã đồng bộ ' + g.built + ' khung' + (themeTxt ? ' (' + themeTxt + ')' : ''));
+          if (g.reused > 0) parts.push('giữ ' + g.reused + ' khung sẵn có');
+          if (g.keptProtected > 0) parts.push('bảo toàn ' + g.keptProtected + ' bản đã chọn/tự sửa');
+        }
+        return {
+          title: g.title,
+          badge: isUndo ? 'Hoàn tác' : ('✓ ' + g.built + ' khung'),
+          badgeKind: isUndo ? 'undo' : 'ok',
+          desc: parts.join(' · '),
+        };
+      });
+      renderRows(rows);
+    }
+
+    btnUpdate.onclick = async () => {
+      btnUpdate.disabled = true;
+      btnRollback.disabled = true;
+      prog.classList.add('on');
+      fill.style.width = '10%';
+      setStatus('Đang cập nhật…');
+      try {
+        const res = await callMain('updateDraft', {});
+        fill.style.width = '100%';
+        const count = res.builtCount || 0;
+        const groups = Array.isArray(res.groups) ? res.groups : [];
+        if (groups.length) renderSyncResult(groups, 'sync');
+        canRollback = count > 0;
+        const gNote = groups.length ? ' (' + groups.length + ' nhóm)' : '';
+        const protNote = res.keptProtected ? ' · bảo toàn ' + res.keptProtected + ' bản đã chọn' : '';
+        setStatus('Đã cập nhật ' + count + ' khung' + gNote + protNote + '.', 'ok');
+      } catch (err) {
+        fill.style.width = '0%';
+        setStatus('Lỗi: ' + err.message, 'err');
+      } finally {
+        btnUpdate.disabled = false;
+        btnRollback.disabled = !canRollback;
+      }
+    };
+
+    btnRollback.onclick = async () => {
+      if (!canRollback) return;
+      btnUpdate.disabled = true;
+      btnRollback.disabled = true;
+      try {
+        const res = await callMain('rollbackDraft', {});
+        prog.classList.remove('on');
+        fill.style.width = '0%';
+        canRollback = false;
+        const groups = Array.isArray(res.groups) ? res.groups : [];
+        if (groups.length) renderSyncResult(groups, 'undo');
+        else if (cachedCat) renderPlan(cachedCat);
+        const count = res.rolledBackCount || 0;
+        const gNote = groups.length ? ' (' + groups.length + ' nhóm)' : '';
+        setStatus('Đã hoàn tác ' + count + ' khung' + gNote + '.', 'ok');
+      } catch (err) {
+        setStatus('Lỗi: ' + err.message, 'err');
+      } finally {
+        btnUpdate.disabled = false;
+        btnRollback.disabled = !canRollback;
+      }
+    };
+
+    window.onmessage = (e) => {
+      const m = e.data && e.data.pluginMessage;
+      if (!m) return;
+      if (m.type === 'PLUGIN_PROGRESS') {
+        prog.classList.add('on');
+        fill.style.width = Math.min(100, m.pct || 0) + '%';
+        if (m.text) setStatus(m.text);
+        return;
+      }
+      if (m.type === 'PLUGIN_RESULT' && m.result) {
+        const w = waiters[m.result.id];
+        if (w) { delete waiters[m.result.id]; w(m.result); }
+      }
+    };
+
+    (async () => {
+      try {
+        cachedCat = await callMain('getCatalog', {});
+        renderPlan(cachedCat);
+      } catch (err) {
+        setStatus('Lỗi: ' + err.message, 'err');
+      }
+    })();
+  </script>
+</body>
+</html>

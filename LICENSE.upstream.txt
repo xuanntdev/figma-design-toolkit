@@ -1,0 +1,21 @@
+LICENSE PLACEHOLDER -- decision needed before this repository is published.
+
+This repository does not yet have a chosen license. Every `pyproject.toml` under `packages/`
+currently declares `license = { text = "Proprietary" }`, which conflicts with publishing this
+repository as `gitlab.com/xuandev/knowledge-toolkit` (a public, third-party-installable kit): a
+"Proprietary" package with no further terms gives an outside team no lawful basis to install,
+run, fork or modify it, even though that is the explicit purpose of this repository (see the
+root README).
+
+Before the first push:
+
+1. Choose a license (for example MIT, Apache-2.0, or another OSI-approved license -- this is a
+   product/legal decision, not a technical one, and is intentionally left to the person
+   publishing this repository).
+2. Replace this file's contents with the full text of that license.
+3. Update `license = { text = "Proprietary" }` to the chosen SPDX identifier (for example
+   `license = "MIT"`) in every `packages/*/pyproject.toml` and in
+   `examples/kb-plugin-example/pyproject.toml`.
+4. Mention the license in the root `README.md` if the chosen license expects that (most do).
+
+Until this is done, nothing in this repository grants a third party the right to use it.

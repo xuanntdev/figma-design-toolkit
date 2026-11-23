@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "title": "1 · Bắt đầu (1 màn mẫu)",
+      "desc": "Chào mừng (Sáng & Tối)"
+    }
+  ],
+  "screenIds": ["welcome"],
+  "themes": ["light", "dark"],
+  "replace": true
+}

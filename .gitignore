@@ -1,0 +1,9 @@
+/dist/
+/plugin/
+/captures/
+/test-state/
+/project/dist/
+__pycache__/
+*.py[cod]
+.venv/
+.env
