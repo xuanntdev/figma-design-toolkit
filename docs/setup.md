@@ -44,16 +44,46 @@ Mỗi lần sửa `project/`: chạy lại `build`, mở lại plugin, bấm **C
 }
 ```
 
-| Khoá | Ý nghĩa |
-| --- | --- |
-| `name` / `id` | Tên plugin hiện trong Figma (cả tiêu đề cửa sổ) và ID trong manifest. `init --name` (bắt buộc) tự sinh `id`. |
-| `frame` | Cỡ khung màn: `desktop` (1440×1024), `tablet` (834×1194), `mobile` (393×873), `"1280x800"` hoặc `{ "width", "height", "perRow" }`. Lưới và mã dựng màn (`ST_GRID.cellW/cellH`) theo cỡ này. |
-| `target` | Bấm **Cập nhật** dựng vào đâu: `improved` = khung **Cải tiến** (bản đề xuất), `current` = khung **Hiện tại** (vẽ lại màn đang chạy). |
-| `improved` | Mặc định `true`. `false` = dự án chỉ có khu **Hiện tại**: plugin không tạo, không đòi, không đọc/ghi khu Cải tiến (file chỉ có Section Hiện tại chạy được; file trống chỉ tạo Hiện tại; Section Cải tiến cũ để nguyên). Bắt buộc `target: "current"`. |
-| `screenLabels` | Mặc định `true`: mỗi frame màn có nhãn mã + title + stem phía trên. `false` = tắt nhãn. |
-| `labels` | Đổi tên khung/trang: `currentName`, `improvedName`, `currentSub`, `improvedSub`, `pageFeatures`, `pageTokens`. |
+Mọi khoá ngoài tên/cỡ khung đều **tuỳ chọn, mặc định giữ hành vi cơ bản của kit** (lưới/container, thay bản nháp, không nhãn chữ, không Xem trước, không tự dọn). Mỗi dự án bật đúng thứ cần: xem 2 cách làm điển hình ở [workflow.md](workflow.md).
 
-Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--extension/--plan/--out` vẫn dùng được và luôn thắng cấu hình.
+**Cơ bản**
+
+| Khoá | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `name` / `id` | | Tên plugin hiện trong Figma (cả tiêu đề cửa sổ) và ID trong manifest. `init --name` (bắt buộc) tự sinh `id`. |
+| `frame` | `mobile` | Cỡ khung màn: `desktop` (1440×1024), `tablet` (834×1194), `mobile` (393×873), `"1280x800"` hoặc `{ "width", "height", "perRow" }`. Lưới và mã dựng màn (`ST_GRID.cellW/cellH`) theo cỡ này. |
+| `target` | `improved` | Bấm **Cập nhật** dựng vào đâu: `improved` = khu **Cải tiến** (bản đề xuất, sinh màn mới), `current` = khu **Hiện tại** (vẽ lại màn đang chạy để designer sửa trực tiếp). |
+| `improved` | `true` | `false` = dự án chỉ có khu **Hiện tại**: plugin không tạo, không đòi, không đọc/ghi khu Cải tiến. Bắt buộc `target: "current"`. |
+| `labels` | | Đổi tên khung/trang: `currentName`, `improvedName`, `currentSub`, `improvedSub`, `pageFeatures`, `pageTokens`. |
+
+**Bố cục khu Hiện tại** (khi `target: "current"`; khu Cải tiến luôn là lưới/gương Section)
+
+| Khoá | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `layout` | `"grid"` | `"grid"`: khung **Hiện tại** dạng lưới (container), hoặc Section Sáng/Tối → nhóm nếu file đã có sẵn Section Hiện tại; Cải tiến gương lại cấu trúc đó. `"sections"`: khu Hiện tại là **cây Section** do plugin dựng và tự xếp lại mỗi lượt (không còn container Hiện tại; Cải tiến vẫn là container cạnh cây). Đổi từ `grid` sang `sections` thì lượt đầu tự chuyển khung cũ vào cây. |
+| `sectionLevels` | `["area","group","flow"]` | Chỉ với `layout: "sections"`. Các cấp Section, đúng thứ tự khu → nhóm → luồng, bỏ cấp nào cũng được: `["group","flow"]`, `["group"]`, `["area","flow"]`… Khung màn nằm ở cấp cuối. Cấp lấy từ plan: khu = `groupOrders[nhóm].area`, luồng = `screenFlows[màn]`. |
+| `collapseSingleFlow` | `true` | Nhóm chỉ có một luồng thì khung nằm thẳng trong Section nhóm (cấp luồng gộp vào nhóm). Chỉ khi `sectionLevels` có `group`. |
+| `sectionFills` | `{"area": null, "group": "#DCEAFB", "flow": "#EEF5FE"}` | Màu nền từng cấp (`#RRGGBB`); `null` = trong suốt. Khoá bỏ trống lấy mặc định. Section designer đã có sẵn cùng tên giữ màu của họ. |
+| `screenLabels` | `false` | `false`: kit không đặt tên layer hay nhãn. `"name"`: chỉ đặt tên layer `<mã> · <title>`. `true`: tên layer + 2 dòng chữ (tên màn, stem) phía trên mỗi khung (lưới chừa chỗ cho nhãn). |
+| `sortGroups` | `false` | `true`: nhóm trong lưới xếp theo `order` (nhóm không có `order` xếp cuối). `false`: theo thứ tự extension khai báo. Cây Section luôn xếp theo `order`. |
+
+**Đồng bộ khi bấm Cập nhật**
+
+| Khoá | Mặc định | Ý nghĩa |
+| --- | --- | --- |
+| `sync` | `"replace"` | `"replace"`: thay bản nháp `source=ai` của màn bằng bản dựng mới, chỉ giữ bản đã chọn (`status=chosen`) hoặc vẽ tay (`source=human`). `"merge"`: merge 3 chiều theo màn: không đổi nguồn thì bỏ qua, khung designer đã sửa tay (so vân tay) luôn giữ, nguồn đổi mà khung cũng đã sửa thì **xung đột** giải ngay trong plugin; có nút **Xuất thay đổi**. Trong chế độ Section kiểu `grid` (Hiện tại do designer vẽ sẵn) chỉ giữ bản sửa tay, chưa có xung đột. |
+| `preview` | `false` | `true`: **Cập nhật** hiện bảng **Xem trước** (bỏ qua / dựng mới / thay / giữ sửa tay / xung đột) rồi mới ghi khi bấm **Áp dụng**. `false`: ghi ngay. |
+| `cleanup` | `false` | `true`: mỗi lượt tự dọn khu thừa (khu Cải tiến khi `improved: false`; ô/vùng chủ đề không có trong `DRAFT_PLAN.themes`, vd phần Tối khi plan chỉ `["light"]`). Chỉ xoá node do plugin tạo và chưa được bảo vệ; node designer tự vẽ giữ lại và được báo. |
+| `tokens` | `"button"` | Trang **Token & Component** (extension có `buildTokens`): `"button"` = chỉ nút **Token**; `"update"` = làm mới thêm ở mỗi lượt Cập nhật; `"off"` = tắt. |
+
+Hai cấu hình thường gặp:
+
+```json
+{ "target": "current", "improved": false, "layout": "sections", "sync": "merge", "preview": true, "cleanup": true }
+{ "target": "improved", "improved": true, "layout": "grid", "sync": "replace" }
+```
+
+Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--extension/--plan/--out` vẫn dùng được và luôn thắng cấu hình. Giá trị sai (vd `layout: "tree"`, `sectionLevels` sai thứ tự) bị từ chối ngay khi `build` kèm thông báo.
 
 ## Bảng lệnh CLI
 
@@ -65,5 +95,5 @@ Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--exten
 | `python design_sync.py check` | Kiểm giới hạn mã sạch (≤ 300 dòng/file, ≤ 40 dòng/hàm) của `project/extension/` và cú pháp `project/dist/code.js`. |
 | `python design_sync.py manifest --root <dir> --version <v> --commit <sha>` | Tạo `current/manifest.json` kèm SHA-256 cho thư mục ảnh chụp tham chiếu. |
 | `node capture/capture.mjs <nhóm>` / `node capture/gen-plan.mjs` | Tuỳ chọn: chụp web thành snapshot rồi sinh plan, xem [capture.md](capture.md). |
-| `node verify_project.js [code.js]` | Chạy plugin của dự án trong Figma giả: dựng hết màn trong plan, thiếu font, chạy lại ổn định, hook Token. |
+| `node verify_project.js [code.js]` | Chạy plugin của dự án trong Figma giả: dựng hết màn trong plan, thiếu font, chạy lại ổn định (theo `sync`), hook Token (theo `tokens`). |
 | `python verify_release.py` | Chạy trọn bộ kiểm thử tự động (yêu cầu Node.js). |
