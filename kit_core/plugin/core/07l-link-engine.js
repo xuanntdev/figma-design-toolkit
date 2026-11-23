@@ -95,6 +95,7 @@ function lkInstantiate(parent, n, link) {
 }
 
 function lkMatch(rule, n, ctx) {
+  if (typeof rule.match !== 'function') return null; // luật chỉ khai matchRun
   try {
     return rule.match(n, ctx) || null;
   } catch (err) {

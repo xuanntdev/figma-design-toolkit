@@ -45,7 +45,7 @@ const FAKE_RULES = [
   { name: 'card', match: (n) => (n.kind === 'card' ? { comp: 'card', size: false } : null) },
   { name: 'ghost', match: (n) => (n.kind === 'ghost' ? { comp: 'ghost' } : null) },
   {
-    name: 'pair', match: () => null,
+    name: 'pair',
     matchRun: (list, i) => (list[i].kind === 'pa' && list[i + 1] && list[i + 1].kind === 'pb'
       ? { link: { comp: 'pair', name: 'Pair' }, span: 2, box: { x: list[i].x, y: list[i].y, w: 30, h: 10 } } : null),
   },
