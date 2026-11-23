@@ -1,0 +1,16 @@
+{
+ "id": "sample",
+ "title": "1 · Trang mẫu",
+ "order": 1,
+ "area": "MẪU",
+ "screens": [
+  {
+   "stem": "sample-danh-sach",
+   "title": "Đơn hàng · Danh sách"
+  },
+  {
+   "stem": "sample-chi-tiet",
+   "title": "Đơn hàng · Chi tiết (hộp thoại)"
+  }
+ ]
+}

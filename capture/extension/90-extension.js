@@ -16,4 +16,9 @@ const DESIGN_EXTENSION = {
   build: (screen) => snapBuildScreen(screen),
   sourceKey: (screen) => JSON.stringify(SNAP_SNAPSHOTS[screen.stem] || null),
   sourceTexts: (screen) => snapSnapTexts(SNAP_SNAPSHOTS[screen.stem], []),
+  // Engine link (lõi): luật + bảng token + trang Token & Component do mô-đun extension khai ở SNAP_LINK; getter để mô-đun nạp sau vẫn thấy.
+  get linkRules() { return SNAP_LINK.linkRules; },
+  get linkTokens() { return SNAP_LINK.linkTokens; },
+  get linkTag() { return SNAP_LINK.linkTag; },
+  get buildTokens() { return SNAP_LINK.buildTokens; },
 };

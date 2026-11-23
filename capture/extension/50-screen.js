@@ -13,7 +13,7 @@ function snapBuildScreen(screen) {
   const snap = SNAP_SNAPSHOTS[screen.stem];
   if (!snap) throw new Error('Chưa có snapshot cho màn ' + screen.stem + '. Chạy capture/gen-plan.mjs rồi build lại.');
   const frame = snapScreenFrame(snap);
-  for (const n of snap.children) snapNode(frame, n, snap);
+  snapChildren(frame, snap.children, snap);
   return frame;
 }
 

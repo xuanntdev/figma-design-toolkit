@@ -7,6 +7,7 @@ function snapTextBase(t, n) {
   t.fontName = snapFont(n.f, n.fw, n.it);
   t.fontSize = n.fs;
   t.characters = n.s;
+  if (n.lh && DESIGN_EXTENSION.linkTokens) t.lineHeight = { value: n.lh, unit: 'PIXELS' }; // line-height thật: điều kiện để khớp text style
   t.fills = snapPaint(n.col, n.ca);
   if (n.ls) t.letterSpacing = { value: n.ls, unit: 'PIXELS' };
   if (n.ul) t.textDecoration = 'UNDERLINE';

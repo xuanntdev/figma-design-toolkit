@@ -63,13 +63,38 @@ function snapBox(parent, n) {
 
 function snapFrame(parent, n, snap) {
   const f = snapBox(parent, n);
-  for (const c of n.c || []) snapNode(f, c, snap);
+  snapChildren(f, n.c || [], snap);
   return f;
 }
 
-function snapNode(parent, n, snap) {
+// Khối thô cho đúng một node (engine link gọi khi không luật nào khớp); con của frame đi tiếp qua snapChildren.
+function snapRaw(parent, n, ctx) {
+  const snap = ctx.snap;
   if (n.k === 't') return snapText(parent, n);
   if (n.k === 's') return snapSvg(parent, n, snap);
   if (n.k === 'i') return snapImage(parent, n, snap);
   return snapFrame(parent, n, snap);
+}
+
+const SNAP_LINK_CTX = new WeakMap();
+
+function snapCount(n) {
+  return 1 + (n.c || []).reduce((sum, c) => sum + snapCount(c), 0);
+}
+
+// Nhãn thống kê cho phần tử chưa map được (frame theo tên; chữ không đếm riêng).
+function snapLinkLabel(n) {
+  if (n.k === 't') return null;
+  return n.k === 'f' ? (n.n || 'frame') : (n.k === 's' ? 'svg' : 'img');
+}
+
+function snapLinkCtx(snap) {
+  if (!SNAP_LINK_CTX.has(snap)) SNAP_LINK_CTX.set(snap, { snap, count: snapCount, label: snapLinkLabel });
+  return SNAP_LINK_CTX.get(snap);
+}
+
+// Mọi danh sách con (con của frame, gốc màn) đi qua engine link ở lõi: luật của extension khớp -> instance component, không khớp -> snapRaw
+// (khối thô + gắn token). Extension không khai luật thì engine chỉ gọi snapRaw.
+function snapChildren(parent, list, snap) {
+  lkBuildChildren(parent, list, snapLinkCtx(snap), snapRaw);
 }

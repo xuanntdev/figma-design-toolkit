@@ -122,6 +122,7 @@ def verify_layout(kit: Path, work: Path) -> None:
     verify_merge(kit, work, runtime)
     verify_tree(kit, work, runtime)
     verify_link(kit, work, runtime)
+    verify_link_sample(kit, work)
 
 
 def verify_merge(kit: Path, work: Path, runtime: dict) -> None:
@@ -182,6 +183,27 @@ def verify_link(kit: Path, work: Path, runtime: dict) -> None:
     subprocess.run(["node", str(kit / "verify_link.js"), "merge", *bundles], check=True)
     build.build([ext], work / "link-replace", runtime=config.runtime({}), plan=plan)
     subprocess.run(["node", str(kit / "verify_link.js"), "replace", str(work / "link-replace/code.js")], check=True)
+
+
+def verify_link_sample(kit: Path, work: Path) -> None:
+    # 4g. Ví dụ link (capture/link-example) dựng trên snapshot của capture/sample-site (tests/link-sample): instance Button / Tag / App/Header + token,
+    # và công cụ quét khối lặp capture/find-repeats.mjs trên cùng snapshot
+    from kit_core import build, config
+
+    for folder in ("capture/extension", "capture/link-example"):
+        subprocess.run([sys.executable, "-SB", str(kit / "design_sync.py"), "check", "--extension", str(kit / folder)], check=True)
+    data = work / "link-sample-data"
+    (data / "data").mkdir(parents=True)
+    spec = {"kind": "snapshot-dir", "dir": str(kit / "tests/link-sample/sample"), "registry": "SNAP_SNAPSHOTS", "index": "SNAP_GROUPS"}
+    (data / "data" / "sample.gen.json").write_text(json.dumps(spec), encoding="utf-8")
+    plan = {"screenIds": ["sample-danh-sach", "sample-chi-tiet"], "themes": ["light"], "replace": True}
+    dirs = [kit / "capture/extension", kit / "capture/link-example", data]
+    build.build(dirs, work / "link-sample", runtime=config.runtime({"target": "current"}), plan=plan)
+    subprocess.run(["node", str(kit / "verify_link_sample.js"), "example", str(work / "link-sample/code.js")], check=True)
+    build.build(dirs[:1] + [data], work / "link-sample-bare", runtime=config.runtime({"target": "current"}), plan=plan)
+    subprocess.run(["node", str(kit / "verify_link_sample.js"), "bare", str(work / "link-sample-bare/code.js")], check=True)
+    found = subprocess.run(["node", str(kit / "capture/find-repeats.mjs"), "--dir", str(kit / "tests/link-sample"), "--min-screens", "2"], capture_output=True, text=True)
+    assert found.returncode == 0 and "section.card" in found.stdout and "header" in found.stdout, found.stdout + found.stderr
 
 
 def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:
