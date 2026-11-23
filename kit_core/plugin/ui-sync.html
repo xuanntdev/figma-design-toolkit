@@ -15,11 +15,16 @@
 <script>
   const SYNC_KINDS = [
     ['conflict', 'Xung đột (giữ bản sửa tay, bản mới nằm cạnh)', 'warn'],
-    ['keepEdit', 'Giữ bản sửa tay (không dựng bản mới)', 'mute'],
     ['replace', 'Thay bằng bản mới', 'ok'],
     ['create', 'Dựng mới', 'ok'],
-    ['skip', 'Bỏ qua (không đổi)', 'mute'],
   ];
+  // Chỉ liệt kê màn sẽ bị GHI. Màn không đổi / bản sửa tay giữ nguyên không đụng tới nên không đếm;
+  // riêng bản sửa tay chưa có base mà plugin dựng thêm bản mới cạnh thì tính là "Dựng mới".
+  function listOf(summary, key) {
+    const it = summary.items || {};
+    const list = it[key] || [];
+    return key === 'create' ? list.concat((it.keepEdit || []).filter((x) => x.draft)) : list;
+  }
   let applyBar = null;
   let cfPanel = null;
 
@@ -39,7 +44,7 @@
     aiContent.innerHTML = '';
     if (header) aiContent.appendChild(el('div', 'row-t', header));
     for (const [key, label, kind] of SYNC_KINDS) {
-      const list = (summary.items && summary.items[key]) || [];
+      const list = listOf(summary, key);
       const row = el('div', 'row');
       const h = el('div', 'row-h');
       h.appendChild(el('div', 'row-t', label));
@@ -77,7 +82,7 @@
       const writes = hasWrites(res.summary);
       applyBar.querySelector('.btn-primary').disabled = !writes;
       setBar(true);
-      setStatus(writes ? 'Bấm Áp dụng để ghi. Khung bản sửa tay không bao giờ bị xoá.' : 'Không có gì cần ghi.', writes ? '' : 'ok');
+      setStatus(writes ? 'Bấm Áp dụng để ghi.' : 'Không có gì cần ghi.', writes ? '' : 'ok');
     } catch (err) {
       btnUpdate.disabled = false;
       setStatus('Lỗi: ' + err.message, 'err');
@@ -100,7 +105,8 @@
       renderSummary(res.merge, 'Kết quả cập nhật');
       canRollback = (res.builtCount || 0) + (res.movedCount || 0) > 0;
       const notes = res.cleanup && Array.isArray(res.cleanup.notes) ? res.cleanup.notes : [];
-      setStatus('Xong: ' + c.create + ' dựng mới · ' + c.replace + ' thay · ' + c.skip + ' bỏ qua · ' + c.keepEdit + ' giữ sửa tay · ' + c.conflict + ' xung đột.' + (notes.length ? ' ' + notes.join(' ') : ''), c.conflict ? 'err' : 'ok');
+      const created = listOf(res.merge, 'create').length;
+      setStatus('Xong: ' + created + ' dựng mới · ' + c.replace + ' thay · ' + c.conflict + ' xung đột.' + (notes.length ? ' ' + notes.join(' ') : ''), c.conflict ? 'err' : 'ok');
       await refreshConflicts();
     } catch (err) {
       fill.style.width = '0%';
