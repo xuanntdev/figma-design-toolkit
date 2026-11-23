@@ -7,5 +7,11 @@
   ],
   "screenIds": ["welcome"],
   "themes": ["light", "dark"],
-  "replace": true
+  "replace": true,
+  "groupOrders": {
+    "getting-started": { "order": 1, "title": "1 · Bắt đầu", "area": "MẪU" }
+  },
+  "screenFlows": {
+    "welcome": { "id": "intro", "title": "GIỚI THIỆU", "order": 1 }
+  }
 }

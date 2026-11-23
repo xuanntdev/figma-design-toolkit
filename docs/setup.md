@@ -39,6 +39,7 @@ Mỗi lần sửa `project/`: chạy lại `build`, mở lại plugin, bấm **C
   "id": "my-app-design",
   "frame": "desktop",
   "target": "improved",
+  "improved": true,
   "labels": { "currentName": "Hiện tại", "improvedName": "Cải tiến" }
 }
 ```
@@ -48,6 +49,8 @@ Mỗi lần sửa `project/`: chạy lại `build`, mở lại plugin, bấm **C
 | `name` / `id` | Tên plugin hiện trong Figma (cả tiêu đề cửa sổ) và ID trong manifest. `init --name` (bắt buộc) tự sinh `id`. |
 | `frame` | Cỡ khung màn: `desktop` (1440×1024), `tablet` (834×1194), `mobile` (393×873), `"1280x800"` hoặc `{ "width", "height", "perRow" }`. Lưới và mã dựng màn (`ST_GRID.cellW/cellH`) theo cỡ này. |
 | `target` | Bấm **Cập nhật** dựng vào đâu: `improved` = khung **Cải tiến** (bản đề xuất), `current` = khung **Hiện tại** (vẽ lại màn đang chạy). |
+| `improved` | Mặc định `true`. `false` = dự án chỉ có khu **Hiện tại**: plugin không tạo, không đòi, không đọc/ghi khu Cải tiến (file chỉ có Section Hiện tại chạy được; file trống chỉ tạo Hiện tại; Section Cải tiến cũ để nguyên). Bắt buộc `target: "current"`. |
+| `screenLabels` | Mặc định `true`: mỗi frame màn có nhãn mã + title + stem phía trên. `false` = tắt nhãn. |
 | `labels` | Đổi tên khung/trang: `currentName`, `improvedName`, `currentSub`, `improvedSub`, `pageFeatures`, `pageTokens`. |
 
 Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--extension/--plan/--out` vẫn dùng được và luôn thắng cấu hình.
@@ -61,4 +64,6 @@ Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--exten
 | `python design_sync.py build` | Dựng plugin offline cho `project/` ra `project/dist/`. |
 | `python design_sync.py check` | Kiểm giới hạn mã sạch (≤ 300 dòng/file, ≤ 40 dòng/hàm) của `project/extension/` và cú pháp `project/dist/code.js`. |
 | `python design_sync.py manifest --root <dir> --version <v> --commit <sha>` | Tạo `current/manifest.json` kèm SHA-256 cho thư mục ảnh chụp tham chiếu. |
+| `node capture/capture.mjs <nhóm>` / `node capture/gen-plan.mjs` | Tuỳ chọn: chụp web thành snapshot rồi sinh plan, xem [capture.md](capture.md). |
+| `node verify_project.js [code.js]` | Chạy plugin của dự án trong Figma giả: dựng hết màn trong plan, thiếu font, chạy lại ổn định, hook Token. |
 | `python verify_release.py` | Chạy trọn bộ kiểm thử tự động (yêu cầu Node.js). |
