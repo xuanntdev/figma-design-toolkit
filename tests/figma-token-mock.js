@@ -119,6 +119,7 @@ module.exports = function extendMock(MockNode) {
       createVariable(name, col, type) {
         assertCollection(col);
         const v = { id: 'V' + seq++, name, type, variableCollectionId: col.id, values: {}, scopes: ['ALL_SCOPES'], codeSyntax: {}, description: '',
+          get resolvedType() { return this.type; }, get valuesByMode() { return this.values; }, // tên thật của Figma API (code plugin đọc tên này)
           setValueForMode(m, val) { this.values[m] = val; },
           setVariableCodeSyntax(platform, v2) { this.codeSyntax[platform] = v2; } };
         variables.push(v);
