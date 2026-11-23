@@ -48,7 +48,7 @@ function stWriteCell(container, cells, item, app) {
     cells[key] = cell;
   }
   cell.resize(ST_GRID.cellW, ST_GRID.cellH);
-  cell.name = item.screenId + ' · ' + item.theme;
+  cell.name = item.label || (item.screenId + ' · ' + item.theme);
   cell.fills = [{ type: 'IMAGE', imageHash: image.hash, scaleMode: 'FILL' }];
   cell.opacity = 1;
   stTag(cell, {
@@ -58,7 +58,7 @@ function stWriteCell(container, cells, item, app) {
   cell.locked = true;
 }
 
-// items: [{ screenId, theme, hash, base64 }]; removed: [{ screenId, theme }]; app: { version, commit, capturedAt }.
+// items: [{ screenId, theme, hash, base64, label? }] (label = tên tiếng Việt của màn, mặc định `screenId · theme`); removed: [{ screenId, theme }]; app: { version, commit, capturedAt }.
 async function cmdCurrentApply(args) {
   assertCanWrite();
   const container = await stRequireContainer(args, 'current');

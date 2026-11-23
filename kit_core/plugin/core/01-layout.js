@@ -20,6 +20,8 @@ const ST_GRID = {
   groupGap: 120,
   regionGap: 240,
   containerGap: 320,
+  // Chỗ chừa phía trên mỗi khung cho nhãn tên màn (design-sync.json `screenLabels: false` để tắt).
+  labelH: stConfig().screenLabels === false ? 0 : 88,
 };
 
 function stKey(theme, screenId) {
@@ -31,33 +33,60 @@ function stSpan(slots, screenId) {
   return Math.min(ST_GRID.perRow, Math.max(1, (slots && slots[screenId]) || 1));
 }
 
-function stPlaceGroup(group, theme, top, slots, cells) {
+// Cells wrap to a new row after `perRow` columns; a row is as tall as its tallest cell (heights[key], else cellH).
+// Each row keeps `labelH` free above it for the screen name labels.
+function stPlaceGroup(group, theme, top, slots, cells, heights) {
+  const lh = ST_GRID.labelH;
   let x = ST_GRID.pad;
-  let y = top;
+  let y = top + lh;
   let used = 0;
+  let rowH = 0;
   for (const s of group.screens) {
     const span = stSpan(slots, s.stem);
+    const h = heights[stKey(theme, s.stem)] || ST_GRID.cellH;
     if (used > 0 && used + span > ST_GRID.perRow) {
       x = ST_GRID.pad;
-      y += ST_GRID.cellH + ST_GRID.gapY;
+      y += rowH + ST_GRID.gapY + lh;
       used = 0;
+      rowH = 0;
     }
-    cells[stKey(theme, s.stem)] = { x, y, span, theme, screenId: s.stem };
+    cells[stKey(theme, s.stem)] = { x, y, span, theme, screenId: s.stem, h };
     x += span * (ST_GRID.cellW + ST_GRID.gapX);
     used += span;
+    rowH = Math.max(rowH, h);
   }
-  return y + ST_GRID.cellH;
+  return y + rowH;
 }
 
-// groups: [{ id, title, screens: [{ stem }] }]; slots: { [screenId]: columns }; themes: ['light', 'dark'].
-function stComputeLayout(groups, slots, themes) {
+// Flow boxes [{ w, h }] into rows of `perRow` starting at (x0, y0): { points: [{ x, y }], bottom }.
+function stFlowRows(sizes, perRow, gapX, gapY, x0, y0) {
+  const points = [];
+  let x = x0;
+  let y = y0;
+  let rowH = 0;
+  sizes.forEach((b, i) => {
+    if (i > 0 && i % perRow === 0) {
+      x = x0;
+      y += rowH + gapY;
+      rowH = 0;
+    }
+    points.push({ x, y });
+    x += b.w + gapX;
+    rowH = Math.max(rowH, b.h);
+  });
+  return { points, bottom: y + rowH };
+}
+
+// groups: [{ id, title, screens: [{ stem }] }]; slots: { [screenId]: columns }; themes: ['light', 'dark'];
+// heights: { [theme:screenId]: real frame height } (default cellH).
+function stComputeLayout(groups, slots, themes, heights) {
   const cells = {};
   const labels = [];
   let y = ST_GRID.pad + ST_GRID.headerH;
   for (const theme of themes) {
     for (const g of groups) {
       labels.push({ theme, groupId: g.id, title: g.title, x: ST_GRID.pad, y });
-      y = stPlaceGroup(g, theme, y + ST_GRID.titleH, slots, cells) + ST_GRID.groupGap;
+      y = stPlaceGroup(g, theme, y + ST_GRID.titleH, slots, cells, heights || {}) + ST_GRID.groupGap;
     }
     y += ST_GRID.regionGap - ST_GRID.groupGap;
   }

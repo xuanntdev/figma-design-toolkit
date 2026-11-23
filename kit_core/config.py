@@ -24,7 +24,7 @@ LABEL_KEYS = ("currentName", "improvedName", "currentSub", "improvedSub", "pageF
 
 
 def slug(text: str) -> str:
-    """'FTI-LL Thiết kế' -> 'fti-ll-thiet-ke' (dùng làm id plugin)."""
+    """'Ứng dụng Thiết kế' -> 'ung-dung-thiet-ke' (dùng làm id plugin)."""
     ascii_text = unicodedata.normalize("NFKD", text.replace("đ", "d").replace("Đ", "D")).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-") or DEFAULT_ID
 
@@ -56,6 +56,12 @@ def validate(cfg: dict, source: Path) -> dict:
     if cfg.get("target", "improved") not in TARGETS:
         raise ValueError(f"{source}: target phải là {' hoặc '.join(TARGETS)}.")
     parse_frame(cfg.get("frame", "mobile"))
+    if not isinstance(cfg.get("improved", True), bool):
+        raise ValueError(f"{source}: improved phải là true hoặc false.")
+    if cfg.get("improved") is False and cfg.get("target", "improved") != "current":
+        raise ValueError(f"{source}: improved=false (không có khu Cải tiến) thì target phải là current.")
+    if not isinstance(cfg.get("screenLabels", True), bool):
+        raise ValueError(f"{source}: screenLabels phải là true hoặc false.")
     unknown = set(cfg.get("labels") or {}) - set(LABEL_KEYS)
     if unknown:
         raise ValueError(f"{source}: labels không hỗ trợ {sorted(unknown)}. Chỉ nhận {list(LABEL_KEYS)}.")
@@ -81,5 +87,7 @@ def runtime(cfg: dict) -> dict:
         "name": cfg.get("name") or DEFAULT_NAME,
         "frame": parse_frame(cfg.get("frame", "mobile")),
         "target": cfg.get("target", "improved"),
+        "improved": cfg.get("improved", True),
+        "screenLabels": cfg.get("screenLabels", True),
         "labels": cfg.get("labels") or {},
     }

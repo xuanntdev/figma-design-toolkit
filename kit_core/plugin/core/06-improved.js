@@ -25,28 +25,33 @@ function stSameCell(node, id, theme) {
 }
 
 function stIsProtected(node) {
-  return stTagOf(node, 'status') === 'chosen' || stTagOf(node, 'source') === 'human';
+  return stTagOf(node, 'status') === 'chosen' || stTagOf(node, 'source') === 'human' || stIsEdited(node);
 }
 
 // Removes the unprotected ai nodes of this cell; returns how many were replaced and how many were kept.
 function stReplaceAi(container, id, theme) {
   let replaced = 0;
   let kept = 0;
+  stAdoptLegacy(container, id, theme);
   for (const n of container.children.slice()) {
-    if (!stSameCell(n, id, theme) || !stTagOf(n, 'source')) continue;
+    // A label dropped together with its frame earlier in this loop is still in the snapshot list.
+    if (n.removed || !stSameCell(n, id, theme) || !stTagOf(n, 'source')) continue;
     if (stIsProtected(n)) {
       kept += 1;
     } else if (stTagOf(n, 'source') === 'ai') {
+      stDropLabels(container, n);
       n.remove();
       replaced += 1;
     }
   }
+  stSweepLabels(container, id, theme);
   return { replaced, kept };
 }
 
 // args: { screenIds: [..] (default: all), themes: ['light'] }.
 async function cmdBuildImproved(args) {
   assertCanWrite(args);
+  if (!stImprovedOn()) throw new Error('Dự án đã tắt khu Cải tiến (improved=false).');
   await cmdEnsureLayout(args);
   const container = await stRequireContainer(args, 'improved');
   await stPrepare();
@@ -60,7 +65,7 @@ async function cmdBuildImproved(args) {
       const r = stReplaceAi(container, id, theme);
       out.replaced += r.replaced;
       out.keptProtected += r.kept;
-      const frame = ext.build(screen, theme);
+      const frame = stBuildFrame(screen, theme);
       container.appendChild(frame);
       stTag(frame, { source: 'ai', status: 'draft', screenId: id, theme, variant: r.kept });
       out.built.push(id + ':' + theme);

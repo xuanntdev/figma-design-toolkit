@@ -42,7 +42,16 @@ function stOpts(args) {
 }
 
 // Side that "Cập nhật" draws into: 'improved' (default) or 'current', from design-sync.json or the call.
+// design-sync.json `improved: false` removes the "Cải tiến" side: nothing is created, required, read or written there.
+function stImprovedOn() {
+  return stConfig().improved !== false;
+}
+
 function stTarget(args) {
+  if (!stImprovedOn()) {
+    if (args && args.target === 'improved') throw new Error('Dự án đã tắt khu Cải tiến (improved=false); target chỉ nhận current.');
+    return 'current';
+  }
   const t = (args && args.target) || stConfig().target || 'improved';
   if (t !== 'improved' && t !== 'current') throw new Error('target chỉ nhận improved hoặc current: ' + t);
   return t;
@@ -52,7 +61,9 @@ function stTag(node, tags) {
   for (const k of Object.keys(tags)) node.setPluginData(k, String(tags[k]));
 }
 
+// A node removed earlier in the same run still sits in lists gathered before the removal: it reads as untagged.
 function stTagOf(node, k) {
+  if (node.removed) return '';
   return node.getPluginData ? (node.getPluginData(k) || '') : '';
 }
 
@@ -102,16 +113,20 @@ function stEnsureContainer(page, kind, name) {
   return c;
 }
 
-// Proposals already in the "proposed" container per screen => columns each screen occupies (max over themes).
-function stSlots(improved) {
+// Frames already in the containers per screen => columns each screen occupies (max over themes). Several frames of one
+// cell (a kept edited/chosen one plus a new draft) sit side by side, so the cell takes several columns.
+function stSlots(...containers) {
   const perKey = {};
   const slots = {};
-  for (const n of improved.children) {
-    const id = stTagOf(n, 'screenId');
-    if (!id || !stTagOf(n, 'source')) continue;
-    const key = stKey(stTagOf(n, 'theme') || 'light', id);
-    perKey[key] = (perKey[key] || 0) + 1;
-    slots[id] = Math.max(slots[id] || 1, perKey[key]);
+  for (const c of containers) {
+    if (!c) continue;
+    for (const n of c.children) {
+      const id = stTagOf(n, 'screenId');
+      if (!id || !stTagOf(n, 'source')) continue;
+      const key = stKey(stTagOf(n, 'theme') || 'light', id) + '#' + c.id;
+      perKey[key] = (perKey[key] || 0) + 1;
+      slots[id] = Math.max(slots[id] || 1, perKey[key]);
+    }
   }
   return slots;
 }
@@ -132,8 +147,9 @@ function stReposition(container, layout, kind) {
     if (!cell) continue;
     const variant = seen[key] == null ? 0 : seen[key] + 1;
     seen[key] = variant;
-    n.x = stVariantX(cell, kind === 'improved' ? variant : 0);
+    n.x = stVariantX(cell, variant);
     n.y = cell.y;
+    stPlaceLabels(container, n);
     if (kind === 'improved') stTag(n, { variant });
   }
 }
@@ -157,7 +173,7 @@ function stText(parent, s, size, weight, color, x, y, w) {
 function stPlaceholder(container, cell, text) {
   const f = figma.createFrame();
   const w = cell.span * ST_GRID.cellW + (cell.span - 1) * ST_GRID.gapX;
-  f.resize(w, ST_GRID.cellH);
+  f.resize(w, cell.h || ST_GRID.cellH);
   f.name = text + ' · ' + cell.screenId + ' · ' + cell.theme;
   f.fills = stSolid('#FFFFFF', 0.5);
   f.strokes = stSolid('#B8BEC9');
@@ -197,26 +213,43 @@ async function stSetup(args) {
   const features = await stEnsurePage(o.pageFeatures);
   const tokens = await stEnsurePage(o.pageTokens);
   const current = stEnsureContainer(features, 'current', o.currentName);
-  const improved = stEnsureContainer(features, 'improved', o.improvedName);
+  const improved = stImprovedOn() ? stEnsureContainer(features, 'improved', o.improvedName) : null;
   return { o, features, tokens, current, improved };
 }
 
-// Builds or refreshes the structure: 2 pages, 2 containers, grid, labels, placeholders. Safe to run repeatedly.
+// Real frame height per cell (max over both containers) so rows are as tall as their tallest frame.
+function stHeights(current, improved) {
+  const heights = {};
+  for (const [c, kind] of [[current, 'current'], [improved, 'improved']]) {
+    if (!c) continue;
+    for (const n of c.children) {
+      if (!stIsReal(n, kind)) continue;
+      const key = stKey(stTagOf(n, 'theme') || 'light', stTagOf(n, 'screenId'));
+      heights[key] = Math.max(heights[key] || 0, n.height);
+    }
+  }
+  return heights;
+}
+
+// Builds or refreshes the structure: 2 pages, 1-2 containers, grid, labels, placeholders. Safe to run repeatedly.
 async function cmdEnsureLayout(args) {
   const s = await stSetup(args);
-  const layout = stComputeLayout(stGroups(), stSlots(s.improved), s.o.layoutThemes);
-  for (const c of [s.current, s.improved]) c.resize(layout.width, layout.height);
+  const sides = [s.current, s.improved].filter(Boolean);
+  const layout = stComputeLayout(stLayoutGroups(sides), stSlots(s.current, s.improved), stLayoutThemes(s.o), stHeights(s.current, s.improved));
+  for (const c of sides) c.resize(layout.width, layout.height);
   s.current.x = 0;
   s.current.y = 0;
-  s.improved.x = layout.width + ST_GRID.containerGap;
-  s.improved.y = 0;
   stReposition(s.current, layout, 'current');
-  stReposition(s.improved, layout, 'improved');
   stRefreshDecor(s.current, layout, 'current', s.o);
-  stRefreshDecor(s.improved, layout, 'improved', s.o);
+  if (s.improved) {
+    s.improved.x = layout.width + ST_GRID.containerGap;
+    s.improved.y = 0;
+    stReposition(s.improved, layout, 'improved');
+    stRefreshDecor(s.improved, layout, 'improved', s.o);
+  }
   return {
     pages: [s.features.name, s.tokens.name], pageCount: figma.root.children.length,
-    current: s.current.id, improved: s.improved.id, width: layout.width, height: layout.height,
+    current: s.current.id, improved: s.improved ? s.improved.id : null, width: layout.width, height: layout.height,
     cells: Object.keys(layout.cells).length,
   };
 }
