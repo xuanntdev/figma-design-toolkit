@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 BASE = Path(__file__).resolve().parent
-CORE_FILES = ("build.py", "config.py", "manifest.py")
+CORE_FILES = ("build.py", "config.py", "manifest.py", "settings.py")
 PLUGIN_FILES = ("VERSION", "manifest.json", "ui.html", "ui-sync.html")
 
 
@@ -16,7 +16,7 @@ def stage_release(core: Path, license_file: Path, destination: Path) -> str:
     kit_core = destination / "kit_core"
     plugin_source = kit_core / "plugin"
     plugin_source.mkdir(parents=True)
-    root_files = ("design_sync.py", "README.md", "verify_release.py", ".gitignore", *(p.name for p in sorted(BASE.glob("verify_*.js"))))
+    root_files = ("design_sync.py", "README.md", "verify_release.py", "verify_config.py", ".gitignore", *(p.name for p in sorted(BASE.glob("verify_*.js"))))
     for name in root_files:
         shutil.copy(BASE / name, destination)
     shutil.copy(license_file, destination / "LICENSE.upstream.txt")

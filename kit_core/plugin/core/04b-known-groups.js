@@ -41,7 +41,7 @@ function stEarlierGroups(containers, known) {
   return Object.keys(extra).map((id) => extra[id]);
 }
 
-// Menu order: ascending `order`, groups without one last (ties by id when ordered, else keep given order).
+// Menu order (only with design-sync.json `sortGroups: true`): ascending `order`, groups without one last (ties by id when ordered, else keep given order).
 function stSortGroups(groups) {
   const key = (g) => (typeof g.order === 'number' ? g.order : Infinity);
   const byId = (a, b) => (a.id < b.id ? -1 : 1);
@@ -54,5 +54,5 @@ function stSortGroups(groups) {
 function stLayoutGroups(containers) {
   const own = stGroups();
   const all = own.concat(stEarlierGroups(containers, new Set(own.map((g) => g.id))));
-  return stSortGroups(all);
+  return stSortOn() ? stSortGroups(all) : all;
 }

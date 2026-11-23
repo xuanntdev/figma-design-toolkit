@@ -1,10 +1,6 @@
 // Grid layout shared by the "current" and "proposed" containers (pure functions, no Figma calls).
 // The same input (screen groups, columns per screen) gives the same relative coordinates, so a screen's cell
 // lines up horizontally between the two containers.
-// Project settings baked in by `design_sync.py build` from design-sync.json (empty when built without one).
-function stConfig() {
-  return (typeof DESIGN_CONFIG !== 'undefined' && DESIGN_CONFIG) || {};
-}
 
 const ST_FRAME = stConfig().frame || { width: 393, height: 873, perRow: 6 };
 
@@ -20,8 +16,8 @@ const ST_GRID = {
   groupGap: 120,
   regionGap: 240,
   containerGap: 320,
-  // Chỗ chừa phía trên mỗi khung cho nhãn tên màn (design-sync.json `screenLabels: false` để tắt).
-  labelH: stConfig().screenLabels === false ? 0 : 88,
+  // Chỗ chừa phía trên mỗi khung cho nhãn chữ của màn (chỉ khi design-sync.json `screenLabels: true`).
+  labelH: stLabelMode() === 'text' ? 88 : 0,
 };
 
 function stKey(theme, screenId) {

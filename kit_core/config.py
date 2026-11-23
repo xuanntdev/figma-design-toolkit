@@ -11,6 +11,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+from kit_core import settings
+
 CONFIG_NAME = "design-sync.json"
 DEFAULT_NAME = "Đồng bộ thiết kế"
 DEFAULT_ID = "design-sync-toolkit"
@@ -60,8 +62,7 @@ def validate(cfg: dict, source: Path) -> dict:
         raise ValueError(f"{source}: improved phải là true hoặc false.")
     if cfg.get("improved") is False and cfg.get("target", "improved") != "current":
         raise ValueError(f"{source}: improved=false (không có khu Cải tiến) thì target phải là current.")
-    if not isinstance(cfg.get("screenLabels", True), bool):
-        raise ValueError(f"{source}: screenLabels phải là true hoặc false.")
+    settings.validate_options(cfg, source)
     unknown = set(cfg.get("labels") or {}) - set(LABEL_KEYS)
     if unknown:
         raise ValueError(f"{source}: labels không hỗ trợ {sorted(unknown)}. Chỉ nhận {list(LABEL_KEYS)}.")
@@ -88,6 +89,6 @@ def runtime(cfg: dict) -> dict:
         "frame": parse_frame(cfg.get("frame", "mobile")),
         "target": cfg.get("target", "improved"),
         "improved": cfg.get("improved", True),
-        "screenLabels": cfg.get("screenLabels", True),
         "labels": cfg.get("labels") or {},
+        **settings.runtime_options(cfg),
     }
