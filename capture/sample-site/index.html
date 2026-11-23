@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Trang mẫu</title>
+<style>
+  body { margin: 0; font: 14px/1.5 Inter, Arial, sans-serif; color: #141a24; background: #f5f7fb; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0 32px; height: 56px; background: #fff; border-bottom: 1px solid #e6eaf0; }
+  header nav a { margin-left: 24px; color: #4b5567; text-decoration: none; }
+  main { max-width: 960px; margin: 32px auto; padding: 0 32px; }
+  h1 { font-size: 24px; margin: 0 0 16px; }
+  .card { background: #fff; border: 1px solid #e6eaf0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(20, 26, 36, .08); }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e6eaf0; }
+  .tag { padding: 2px 8px; border-radius: 999px; background: #e0ecff; color: #2563eb; font-size: 12px; }
+  button { margin-top: 16px; padding: 8px 18px; border: 0; border-radius: 999px; background: #2563eb; color: #fff; font-weight: 600; }
+  dialog { border: 0; border-radius: 12px; padding: 24px; width: 360px; box-shadow: 0 8px 32px rgba(20, 26, 36, .24); }
+</style>
+</head>
+<body>
+<header><strong>Trang mẫu</strong><nav><a href="/">Đơn hàng</a><a href="/">Báo cáo</a></nav></header>
+<main>
+  <h1>Danh sách đơn hàng</h1>
+  <section class="card">
+    <strong>Đơn gần đây</strong>
+    <table>
+      <thead><tr><th>Mã</th><th>Khách hàng</th><th>Trạng thái</th></tr></thead>
+      <tbody>
+        <tr><td>DH-001</td><td>Công ty A</td><td><span class="tag">Mới</span></td></tr>
+        <tr><td>DH-002</td><td>Công ty B</td><td><span class="tag">Đang xử lý</span></td></tr>
+      </tbody>
+    </table>
+    <button id="open" onclick="document.getElementById('dlg').showModal()">Xem chi tiết</button>
+  </section>
+</main>
+<dialog id="dlg" role="dialog"><h2>Chi tiết đơn DH-001</h2><p>Hộp thoại mẫu để thử chụp lớp phủ.</p><form method="dialog"><button>Đóng</button></form></dialog>
+</body>
+</html>

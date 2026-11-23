@@ -1,0 +1,13 @@
+{
+  "name": "design-sync-capture",
+  "private": true,
+  "type": "module",
+  "description": "Tuỳ chọn: chụp DOM + ảnh màn web (chỉ đọc) thành snapshot cho plugin Figma của kit.",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "plan": "node gen-plan.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.62.1"
+  }
+}
