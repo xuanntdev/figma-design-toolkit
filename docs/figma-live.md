@@ -30,7 +30,7 @@ python design_sync.py export-png --out "$env:TEMP\figma-review.png"
 python design_sync.py export-png "12:34" --session "<session>" --scale 2 --out "$env:TEMP\figma-review-2x.png"
 ```
 
-Dùng thư mục tạm cho ảnh rà soát. Nếu cần kích thước layer, nội dung, style và binding, đọc thêm bằng `tree`. Với repo dùng toolkit ngoài checkout, đặt `--project-dir <thư-mục-dự-án>` trước lệnh `export-png`.
+Dùng thư mục tạm cho ảnh rà soát. Nếu cần kích thước layer, nội dung, style và binding, đọc thêm bằng `tree`.
 
 ## Ghi
 

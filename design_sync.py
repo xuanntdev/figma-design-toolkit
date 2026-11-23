@@ -45,12 +45,12 @@ def project_readme(cfg: dict, empty: bool = False) -> str:
         "",
         f"- Cấu hình: `{config.CONFIG_NAME}` — tên plugin, cỡ khung ({cfg['frame']}: {frame['width']}×{frame['height']}),"
         f" khung đích `{cfg['target']}` (improved = Cải tiến, current = Hiện tại), đổi tên khung qua `labels`.",
-        "- Thiết kế đọc từ file Figma đã ghép. Xem `docs/figma-live.md` trong checkout toolkit.",
+        "- Thiết kế đọc từ file Figma đã ghép. Xem hướng dẫn tại `../docs/figma-live.md`.",
         "- Dự án sẵn sàng ghép file Figma." if empty else "- Builder mẫu: `extension/01-screens.js`, với danh sách màn trong `draft-plan.json`.",
         "",
-        "1. Dựng plugin bằng `python design_sync.py build`. Nếu dự án nằm ngoài `project/` của toolkit, đặt `--project-dir <thư mục dự án>` trước tên lệnh.",
-        "2. Figma: Plugins → Development → Import plugin from manifest… → `dist/manifest.json` của dự án (chỉ làm 1 lần).",
-        f"3. Chạy `python design_sync.py doctor` với cùng thư mục dự án, mở plugin **{cfg['name']}** trong file đích và bấm **Kết nối file**.",
+        "1. Dựng plugin (đứng ở gốc repo): `python design_sync.py build`",
+        "2. Figma: Plugins → Development → Import plugin from manifest… → `project/dist/manifest.json` (chỉ làm 1 lần).",
+        f"3. Chạy `python design_sync.py doctor`, mở plugin **{cfg['name']}** trong file đích và bấm **Kết nối file**.",
         "4. Sửa xong thì commit thư mục `project/` và push lên repo của team để người khác pull về.",
         "",
         "Chiều ngược Figma → repo: `python design_sync.py pull` rồi `python design_sync.py figma-diff` (xem `docs/workflow.md` mục 6)."
