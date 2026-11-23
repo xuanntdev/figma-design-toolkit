@@ -11,6 +11,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
+from verify_config import SCENARIO_A, tree_plan, verify_options, verify_scenarios
+
 PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aLU8AAAAASUVORK5CYII="
 
 
@@ -36,6 +38,23 @@ def verify_kit(kit: Path, work: Path, packaged: bool) -> None:
         if packaged:
             assert contents == (kit / "plugin" / name).read_bytes(), name
 
+    bundle = verify_built_files(work)
+
+    # 4. Kiểm giới hạn kích thước file/hàm + cú pháp Node + kiểm giả lập toàn luồng plugin
+    subprocess.run([*cli, "check", "--extension", str(kit / "example"), "--bundle", str(bundle)], cwd=work, check=True)
+    subprocess.run([*cli, "check", "--extension", str(kit / "kit_core/plugin/core")], cwd=work, check=True)
+    subprocess.run(["node", str(kit / "verify_plugin.js"), str(bundle)], cwd=work, check=True)
+
+    verify_snapshot_dir(kit, work)
+    verify_layout(kit, work)
+    verify_simulation(kit, work, bundle)
+    verify_scenarios(kit, work)
+    verify_options(kit, work)
+    verify_project(kit, work)
+
+
+def verify_built_files(work: Path) -> Path:
+    # 3b. manifest không mở mạng, ui.html offline, bundle có plan và màn mẫu. Trả đường dẫn code.js.
     plugin_manifest = json.loads((work / "built/manifest.json").read_text(encoding="utf-8"))
     assert plugin_manifest["networkAccess"] == {"allowedDomains": ["none"]}, plugin_manifest["networkAccess"]
     assert "devAllowedDomains" not in plugin_manifest["networkAccess"]
@@ -47,16 +66,7 @@ def verify_kit(kit: Path, work: Path, packaged: bool) -> None:
     bundle = work / "built/code.js"
     code_text = bundle.read_text(encoding="utf-8")
     assert "DRAFT_PLAN" in code_text and "Chào mừng" in code_text
-
-    # 4. Kiểm giới hạn kích thước file/hàm + cú pháp Node + kiểm giả lập toàn luồng plugin
-    subprocess.run([*cli, "check", "--extension", str(kit / "example"), "--bundle", str(bundle)], cwd=work, check=True)
-    subprocess.run([*cli, "check", "--extension", str(kit / "kit_core/plugin/core")], cwd=work, check=True)
-    subprocess.run(["node", str(kit / "verify_plugin.js"), str(bundle)], cwd=work, check=True)
-
-    verify_snapshot_dir(kit, work)
-    verify_layout(kit, work)
-    verify_simulation(kit, work, bundle)
-    verify_project(kit, work)
+    return bundle
 
 
 def verify_snapshot_dir(kit: Path, work: Path) -> None:
@@ -92,8 +102,8 @@ def verify_layout(kit: Path, work: Path) -> None:
     sys.path.insert(0, str(kit))
     from kit_core import config
 
-    runtime = config.runtime({"frame": {"width": 100, "height": 100, "perRow": 3}, "target": "current", "improved": False})
-    assert runtime["screenLabels"] is True
+    # Kịch bản A (sửa trực tiếp) với mọi tính năng nâng cao bật: cây Section, merge, nhãn chữ, dọn khu
+    runtime = config.runtime({**SCENARIO_A, "frame": {"width": 100, "height": 100, "perRow": 3}, "screenLabels": True, "cleanup": True})
     assert runtime["improved"] is False and config.runtime({})["improved"] is True
     for bad in ({"improved": False, "target": "improved"}, {"improved": False}, {"improved": "no"}):
         try:
@@ -130,14 +140,6 @@ def verify_merge(kit: Path, work: Path, runtime: dict) -> None:
     subprocess.run(["node", str(kit / "verify_merge.js"), *bundles], check=True)
 
 
-def tree_plan(areas: dict, flows: dict) -> dict:
-    """Plan có groupOrders (area) + screenFlows như capture/gen-plan.mjs sinh: flows = {nhóm: [(id, title, [stem...])]}."""
-    titles = {"g1": "Nhóm 1", "g2": "Nhóm 2", "g3": "Nhóm 3"}
-    orders = {g: {"order": int(g[1]), "title": t, "area": areas[g]} for g, t in titles.items()}
-    screen_flows = {s: {"id": fid, "title": ft, "order": i} for fl in flows.values() for i, (fid, ft, stems) in enumerate(fl, 1) for s in stems}
-    return {"screenIds": ["g1-a"], "themes": ["light"], "replace": True, "groupOrders": orders, "screenFlows": screen_flows}
-
-
 def verify_tree(kit: Path, work: Path, runtime: dict) -> None:
     # 4e. Cây Section khu -> nhóm -> luồng: plan 1 (g1,g3 = KHU A, g2 = KHU B) và plan 2 (đổi khu + luồng) trên extension thử
     from kit_core import build
@@ -160,8 +162,13 @@ def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:
     from kit_core import build
 
     ext = kit / "tests" / "token-extension"
-    build.build([ext], work / "token-out", runtime={}, plan=json.loads((ext / "draft-plan.json").read_text(encoding="utf-8")))
-    subprocess.run(["node", str(kit / "verify_project.js"), str(work / "token-out/code.js")], check=True)
+    plan = json.loads((ext / "draft-plan.json").read_text(encoding="utf-8"))
+    from kit_core import config
+
+    for name, options in (("default", {}), ("merge-update", {"sync": "merge", "tokens": "update"}), ("off", {"tokens": "off"})):
+        out = work / f"token-{name}"
+        build.build([ext], out, runtime=config.runtime(options), plan=plan)
+        subprocess.run(["node", str(kit / "verify_project.js"), str(out / "code.js")], check=True)
 
 
 def verify_project(kit: Path, work: Path) -> None:

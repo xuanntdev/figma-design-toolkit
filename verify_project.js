@@ -88,11 +88,21 @@ function tokenCounts(env) {
   return { vars: r.variables.length, styles: r.styles.length, collections: r.collections.length, sets: r.sets.length, comps, roots: page.children.length, nodes: descendants(page) };
 }
 
-// Trang Token & Component (chỉ khi extension có buildTokens): có nội dung, chạy lại (Cập nhật + nút riêng) không nhân đôi
-// variable/style/component, giữ thứ designer thêm. Trả null nếu extension không khai hook.
-async function checkTokens(env, res) {
-  if (res.value.tokens.skipped) return null;
-  assert.equal(res.value.tokens.ok, true, JSON.stringify(res.value.tokens));
+// Trang Token & Component (chỉ khi extension có buildTokens và tokens != off): tokens=update làm mới ở mỗi lượt Cập nhật, tokens=button
+// chỉ khi bấm nút. Có nội dung, chạy lại không nhân đôi variable/style/component, giữ thứ designer thêm. Trả null nếu không có hook.
+async function checkTokens(env, res, mode) {
+  if (mode === 'off') {
+    assert.equal(res.value.tokens, undefined, 'tokens=off/không có hook: Cập nhật không đụng trang Token');
+    return null;
+  }
+  if (mode === 'button') {
+    assert.equal(res.value.tokens, undefined, 'tokens=button: Cập nhật không tự làm mới trang Token');
+    assert.equal(tokenPage(env.root).children.length, 0, 'tokens=button: chưa bấm nút thì trang Token còn trống');
+    const pressed = await env.call('buildTokens');
+    assert.equal(pressed.ok, true, pressed.error);
+  } else {
+    assert.equal(res.value.tokens.ok, true, JSON.stringify(res.value.tokens));
+  }
   const page = tokenPage(env.root);
   assert.ok(page && page.children.length > 0, 'Trang Token & Component trống');
   const first = tokenCounts(env);
@@ -113,14 +123,15 @@ async function checkTokens(env, res) {
   return first;
 }
 
-// Lượt Cập nhật thứ 2 khi nguồn không đổi: bỏ qua hết, không coi khung chưa ai sửa là đã sửa tay, không đổi trang Token.
-async function checkRerun(env, tok) {
+// Lượt Cập nhật thứ 2 khi nguồn không đổi: sync=merge bỏ qua hết (không coi khung chưa ai sửa là đã sửa tay); sync=replace thay hết
+// bản nháp. Cả hai không nhân đôi khung và không đổi trang Token.
+async function checkRerun(env, tok, merge) {
   const upd = await env.call('updateDraft', {});
   assert.equal(upd.ok, true, upd.error);
   assert.equal(upd.value.editedKept, 0, 'Cập nhật lại khung chưa ai sửa không được coi là đã sửa tay');
   assert.equal(upd.value.keptProtected, 0);
-  assert.equal(upd.value.builtCount, 0, 'Nguồn snapshot không đổi: lượt 2 bỏ qua hết, không dựng lại');
-  assert.equal(upd.value.merge.counts.skip, upd.value.proposals.length);
+  assert.equal(upd.value.builtCount, merge ? 0 : upd.value.proposals.length, merge ? 'Nguồn không đổi: lượt 2 bỏ qua hết' : 'sync=replace: lượt 2 thay hết bản nháp');
+  assert.equal(upd.value.merge.counts[merge ? 'skip' : 'replace'], upd.value.proposals.length);
   if (tok) assert.deepEqual(tokenCounts(env), tok, 'Cập nhật lần 2 làm đổi trang Token');
 }
 
@@ -131,11 +142,12 @@ async function run(bundle, fontsMissing) {
   const res = await env.call('updateDraft', {});
   assert.equal(res.ok, true, res.error);
   assert.equal(res.value.builtCount, cat.value.defaultPlan.screenIds.length * cat.value.defaultPlan.themes.length);
-  const tok = await checkTokens(env, res);
-  await checkRerun(env, tok);
+  const settings = cat.value.settings;
+  const tok = await checkTokens(env, res, settings.tokens);
+  await checkRerun(env, tok, settings.sync === 'merge');
   const acc = count(env.root, {});
   assert.ok(acc.TEXT > 0 || cat.value.defaultPlan.screenIds.length === 0, 'Không có text node nào');
-  console.log(`${fontsMissing ? 'thiếu font' : 'đủ font'}: dựng ${res.value.builtCount} khung ·`, JSON.stringify(acc), '· token:', (tok ? JSON.stringify(tok) : 'không có hook'), '· font nạp:', [...new Set(env.loaded)].join(', '));
+  console.log(`${fontsMissing ? 'thiếu font' : 'đủ font'} · sync=${settings.sync} tokens=${settings.tokens}: dựng ${res.value.builtCount} khung ·`, JSON.stringify(acc), '· token:', (tok ? JSON.stringify(tok) : 'không có hook'), '· font nạp:', [...new Set(env.loaded)].join(', '));
 }
 
 (async () => {

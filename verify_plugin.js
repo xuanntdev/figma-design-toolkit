@@ -1,4 +1,4 @@
-// Kiểm giả lập đầy đủ plugin cục bộ: chế độ file mới (Container), chế độ gương Section (Hiện tại ↔ Cải tiến),
+// Kiểm giả lập đầy đủ plugin cục bộ ở cấu hình MẶC ĐỊNH (= hành vi kit gốc: layout grid, sync replace, không nhãn/xem trước/dọn): chế độ file mới (Container), chế độ gương Section (Hiện tại ↔ Cải tiến),
 // bảo toàn status=chosen & source=human, kiểm đích trước khi ghi, hoàn tác an toàn và chuyển tên trang cũ.
 
 const assert = require('node:assert/strict');
@@ -111,14 +111,12 @@ async function testContainerAndUndo(bundlePath) {
   const res2 = await env.call('updateDraft', { target: 'improved' });
   assert.equal(res2.ok, true, res2.error);
   assert.equal(res2.value.keptProtected, 1);
-  assert.equal(res2.value.builtCount, 1, 'Ô còn lại không đổi nguồn => bỏ qua, chỉ dựng bản mới cạnh bản chosen');
-  assert.equal(res2.value.merge.counts.skip, 1);
   assert.ok(findNode(env.root, chosenId), 'Bản status=chosen bị xoá');
 
-  // Hoàn tác gỡ đúng 1 khung mới (ô bỏ qua không bị đụng) và giữ bản chosen; bấm lần 2 phải bị từ chối
+  // Hoàn tác gỡ đúng 2 khung mới và giữ bản chosen; bấm lần 2 phải bị từ chối
   const undo = await env.call('rollbackDraft');
   assert.equal(undo.ok, true, undo.error);
-  assert.equal(undo.value.rolledBackCount, 1);
+  assert.equal(undo.value.rolledBackCount, 2);
   assert.equal(undo.value.groups[0].title, '1 · Bắt đầu');
   assert.ok(findNode(env.root, chosenId), 'Hoàn tác làm mất bản chosen');
   const undo2 = await env.call('rollbackDraft');
@@ -182,7 +180,7 @@ function sectionPage(withGroup) {
   return { page, cur, imp };
 }
 
-// Cỡ khung theo design-sync.json; target=current dựng vào "Hiện tại" dạng cây Section (khu → nhóm → luồng), không đụng "Cải tiến".
+// Cỡ khung theo design-sync.json; target=current dựng vào "Hiện tại" (Container lẫn Section), không đụng "Cải tiến".
 async function testConfigAndCurrentTarget(bundlePath) {
   const cfg = bundleConfig(bundlePath);
   const frame = cfg.frame || { width: 393, height: 873 };
@@ -190,35 +188,26 @@ async function testConfigAndCurrentTarget(bundlePath) {
   const res = await env.call('updateDraft', { target: 'current', themes: ['light'] });
   assert.equal(res.ok, true, res.error);
   assert.equal(res.value.target, 'current');
-  assert.equal(res.value.mode, 'tree');
   const built = findNode(env.root, res.value.proposals[0].frameId);
-  assert.equal(built.parent.getPluginData('treeLevel'), 'flow');
-  assert.deepEqual([built.parent.parent.getPluginData('treeLevel'), built.parent.parent.parent.getPluginData('treeLevel')], ['group', 'area']);
-  assert.equal(built.parent.parent.parent.parent.name, 'Tính năng', 'Không có Hiện tại thì cây nằm thẳng trên trang Tính năng');
+  assert.equal(built.parent.getPluginData('kind'), 'current');
+  assert.equal(built.getPluginData('role'), 'cell');
   assert.equal(built.width, frame.width);
   assert.equal(built.height, frame.height);
   const again = await env.call('updateDraft', { target: 'current', themes: ['light'] });
-  assert.equal(again.value.proposals[0].action, 'skip', 'Nguồn không đổi => bỏ qua, không dựng lại');
-  assert.equal(again.value.proposals[0].frameId, built.id);
-  assert.equal(built.parent.children.filter((n) => n.getPluginData('source') === 'ai').length, 1, 'Không nhân đôi khung');
+  assert.equal(again.value.proposals[0].replaced, 1, 'Cập nhật lại phải thay bản nháp cũ trong Hiện tại');
 
   const s = sectionPage(true);
   const env2 = boot(bundlePath, [s.page]);
   const sec = await env2.call('updateDraft', { target: 'current', themes: ['light', 'dark'] });
   assert.equal(sec.ok, true, sec.error);
-  assert.equal(sec.value.mode, 'tree');
+  assert.equal(sec.value.mode, 'section');
   assert.equal(s.imp.children.length, 0, 'target=current không được ghi vào Cải tiến');
   const light = findNode(env2.root, sec.value.proposals[0].frameId);
+  assert.equal(light.parent.name, '1 · Bắt đầu');
+  assert.ok(light.x >= 60 + 393, 'Không được đè lên khung vẽ tay trong Hiện tại');
+  assert.equal(light.parent.children.length, 2, 'Khung vẽ tay phải được giữ');
   const dark = findNode(env2.root, sec.value.proposals[1].frameId);
-  assert.equal(light.parent.getPluginData('treeLevel'), 'flow');
-  assert.equal(light.parent.parent.name, '1 · Bắt đầu');
-  assert.equal(dark.parent, light.parent, 'Hai chủ đề của một màn nằm cùng Section luồng');
-  const old = s.cur.children.find((n) => n.name === 'Sáng');
-  const manual = old.children[0].children[0];
-  assert.equal(manual.name, 'Chào mừng', 'Khung vẽ tay của designer không bị dời/xoá');
-  assert.deepEqual([manual.x, manual.y], [60, 90]);
-  const tree = s.cur.children.find((n) => n.getPluginData('treeLevel') === 'area');
-  assert.ok(tree.y >= old.y + old.height || tree.x >= old.x + old.width, 'Cây mới không đè lên vùng của designer');
+  assert.equal(dark.parent.parent.name, 'Tối', 'Thiếu vùng Tối thì phải tự tạo');
 }
 
 async function testLegacyPages(bundlePath) {
