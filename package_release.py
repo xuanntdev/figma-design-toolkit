@@ -9,17 +9,21 @@ from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 BASE = Path(__file__).resolve().parent
 CORE_FILES = ("build.py", "config.py", "manifest.py")
-PLUGIN_FILES = ("VERSION", "manifest.json", "ui.html")
+PLUGIN_FILES = ("VERSION", "manifest.json", "ui.html", "ui-sync.html")
 
 
 def stage_release(core: Path, license_file: Path, destination: Path) -> str:
     kit_core = destination / "kit_core"
     plugin_source = kit_core / "plugin"
     plugin_source.mkdir(parents=True)
-    for name in ("design_sync.py", "README.md", "verify_release.py", "verify_plugin.js", ".gitignore"):
+    root_files = ("design_sync.py", "README.md", "verify_release.py", ".gitignore", *(p.name for p in sorted(BASE.glob("verify_*.js"))))
+    for name in root_files:
         shutil.copy(BASE / name, destination)
     shutil.copy(license_file, destination / "LICENSE.upstream.txt")
     shutil.copytree(BASE / "example", destination / "example")
+    shutil.copytree(BASE / "tests", destination / "tests", ignore=shutil.ignore_patterns("__pycache__"))
+    if (BASE / "capture").is_dir():
+        shutil.copytree(BASE / "capture", destination / "capture", ignore=shutil.ignore_patterns("node_modules", "__pycache__"))
     if (BASE / "docs").is_dir():
         shutil.copytree(BASE / "docs", destination / "docs")
     for name in CORE_FILES:

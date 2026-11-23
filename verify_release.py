@@ -53,7 +53,115 @@ def verify_kit(kit: Path, work: Path, packaged: bool) -> None:
     subprocess.run([*cli, "check", "--extension", str(kit / "kit_core/plugin/core")], cwd=work, check=True)
     subprocess.run(["node", str(kit / "verify_plugin.js"), str(bundle)], cwd=work, check=True)
 
+    verify_snapshot_dir(kit, work)
+    verify_layout(kit, work)
+    verify_simulation(kit, work, bundle)
     verify_project(kit, work)
+
+
+def verify_snapshot_dir(kit: Path, work: Path) -> None:
+    # 4b. Loại dữ liệu snapshot-dir: group.json + <stem>.json nhúng vào registry/index khai báo ở mô-đun .js
+    sys.path.insert(0, str(kit))
+    from kit_core import build
+
+    snaps = work / "snaps" / "g1"
+    ext = work / "snap-ext"
+    (ext / "data").mkdir(parents=True)
+    snaps.mkdir(parents=True)
+    (snaps / "group.json").write_text(json.dumps({"id": "g1", "title": "Nhóm", "order": 5, "screens": [{"stem": "g1-a", "title": "Màn A"}]}), encoding="utf-8")
+    (snaps / "g1-a.json").write_text(json.dumps({"id": "g1-a", "w": 1440}), encoding="utf-8")
+    (ext / "00-registry.js").write_text("var SNAPS = {};\nvar GROUPS = [];\n", encoding="utf-8")
+    spec = {"kind": "snapshot-dir", "dir": "../../snaps/g1", "registry": "SNAPS", "index": "GROUPS"}
+    (ext / "data" / "g1.gen.json").write_text(json.dumps(spec), encoding="utf-8")
+    text = build.render_module(ext / "data" / "g1.gen.json")
+    assert 'SNAPS["g1-a"] = {"id":"g1-a","w":1440};' in text and 'GROUPS.push({"id": "g1", "title": "Nhóm"' in text, text
+    assert build.collect(ext)[-1].name == "g1.gen.json"
+
+    # exclude: stem bị loại khỏi cả registry lẫn group.screens; thiếu trường thì như cũ
+    (snaps / "group.json").write_text(json.dumps({"id": "g1", "title": "Nhóm", "order": 5, "screens": [{"stem": "g1-a", "title": "Màn A"}, {"stem": "g1-b", "title": "Màn B"}]}), encoding="utf-8")
+    (snaps / "g1-b.json").write_text(json.dumps({"id": "g1-b"}), encoding="utf-8")
+    full = build.render_module(ext / "data" / "g1.gen.json")
+    assert 'SNAPS["g1-b"]' in full and '"stem": "g1-b"' in full
+    (ext / "data" / "g1.gen.json").write_text(json.dumps({**spec, "exclude": ["g1-b"]}), encoding="utf-8")
+    cut = build.render_module(ext / "data" / "g1.gen.json")
+    assert 'SNAPS["g1-a"]' in cut and 'g1-b' not in cut, cut
+
+
+def verify_layout(kit: Path, work: Path) -> None:
+    # 4c. improved=false (chỉ khu Hiện tại) + xếp hàng không đè, trên extension thử tests/layout-extension
+    sys.path.insert(0, str(kit))
+    from kit_core import config
+
+    runtime = config.runtime({"frame": {"width": 100, "height": 100, "perRow": 3}, "target": "current", "improved": False})
+    assert runtime["screenLabels"] is True
+    assert runtime["improved"] is False and config.runtime({})["improved"] is True
+    for bad in ({"improved": False, "target": "improved"}, {"improved": False}, {"improved": "no"}):
+        try:
+            config.validate(bad, Path("design-sync.json"))
+        except ValueError:
+            continue
+        raise AssertionError(f"Cấu hình sai phải bị từ chối: {bad}")
+    from kit_core import build
+
+    build.build([kit / "tests" / "layout-extension"], work / "layout-out", runtime=runtime)
+    subprocess.run(["node", str(kit / "verify_layout.js"), str(work / "layout-out/code.js")], check=True)
+    plan = {"screenIds": ["g1-a"], "themes": ["light"], "replace": True, "groupOrders": {"gx": {"order": 3, "title": "3 · Mới"}}}
+    build.build([kit / "tests" / "layout-extension"], work / "cleanup-out", runtime=runtime, plan=plan)
+    subprocess.run(["node", str(kit / "verify_cleanup.js"), str(work / "cleanup-out/code.js")], check=True)
+    verify_merge(kit, work, runtime)
+    verify_tree(kit, work, runtime)
+
+
+def verify_merge(kit: Path, work: Path, runtime: dict) -> None:
+    # 4d. Merge 3 chiều theo màn: v1 = extension thử, v1b = cùng extension plan khác (lô khác), v2 = nguồn g1-b/g1-d đổi
+    from kit_core import build
+
+    ext = kit / "tests" / "layout-extension"
+    ext2 = work / "merge-ext2"
+    ext2.mkdir()
+    text = (ext / "01-ext.js").read_text(encoding="utf-8")
+    assert "['b', 300]" in text and "['d', 100]" in text
+    (ext2 / "01-ext.js").write_text(text.replace("['b', 300]", "['b', 310]").replace("['d', 100]", "['d', 110]"), encoding="utf-8")
+    plan = {"themes": ["light"], "replace": True}
+    build.build([ext], work / "merge-v1", runtime=runtime, plan={**plan, "screenIds": ["g1-a"]})
+    build.build([ext], work / "merge-v1b", runtime=runtime, plan={**plan, "screenIds": ["g1-a", "g1-c"]})
+    build.build([ext2], work / "merge-v2", runtime=runtime, plan={**plan, "screenIds": ["g1-b"]})
+    bundles = [str(work / name / "code.js") for name in ("merge-v1", "merge-v1b", "merge-v2")]
+    subprocess.run(["node", str(kit / "verify_merge.js"), *bundles], check=True)
+
+
+def tree_plan(areas: dict, flows: dict) -> dict:
+    """Plan có groupOrders (area) + screenFlows như capture/gen-plan.mjs sinh: flows = {nhóm: [(id, title, [stem...])]}."""
+    titles = {"g1": "Nhóm 1", "g2": "Nhóm 2", "g3": "Nhóm 3"}
+    orders = {g: {"order": int(g[1]), "title": t, "area": areas[g]} for g, t in titles.items()}
+    screen_flows = {s: {"id": fid, "title": ft, "order": i} for fl in flows.values() for i, (fid, ft, stems) in enumerate(fl, 1) for s in stems}
+    return {"screenIds": ["g1-a"], "themes": ["light"], "replace": True, "groupOrders": orders, "screenFlows": screen_flows}
+
+
+def verify_tree(kit: Path, work: Path, runtime: dict) -> None:
+    # 4e. Cây Section khu -> nhóm -> luồng: plan 1 (g1,g3 = KHU A, g2 = KHU B) và plan 2 (đổi khu + luồng) trên extension thử
+    from kit_core import build
+
+    f1 = {
+        "g1": [("f1", "LUỒNG MỘT", ["g1-a", "g1-b"]), ("f2", "LUỒNG HAI", ["g1-c"]), ("f3", "LUỒNG BA", ["g1-d"]), ("f4", "LUỒNG BỐN", ["g1-e"])],
+        "g2": [("x1", "LUỒNG X", ["g2-a", "g2-b"])],
+        "g3": [("p0", "LUỒNG ĐẦU", ["g3-c"]), ("p1", "LUỒNG P", ["g3-a", "g3-b"])],
+    }
+    f2 = {**f1, "g1": [("f1", "LUỒNG MỘT", ["g1-a", "g1-b", "g1-e"]), ("f2", "LUỒNG HAI", ["g1-c"]), ("f3", "LUỒNG BA", ["g1-d"])]}
+    ext = kit / "tests" / "layout-extension"
+    build.build([ext], work / "tree1", runtime=runtime, plan=tree_plan({"g1": "KHU A", "g2": "KHU B", "g3": "KHU A"}, f1))
+    build.build([ext], work / "tree2", runtime=runtime, plan=tree_plan({"g1": "KHU B", "g2": "KHU A", "g3": "KHU B"}, f2))
+    subprocess.run(["node", str(kit / "verify_tree.js"), str(work / "tree1/code.js"), str(work / "tree2/code.js")], check=True)
+
+
+def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:
+    # 4f. verify_project.js: dựng hết màn trong plan (đủ/thiếu font), chạy lại ổn định; extension thử có thêm hook buildTokens
+    subprocess.run(["node", str(kit / "verify_project.js"), str(example_bundle)], check=True)
+    from kit_core import build
+
+    ext = kit / "tests" / "token-extension"
+    build.build([ext], work / "token-out", runtime={}, plan=json.loads((ext / "draft-plan.json").read_text(encoding="utf-8")))
+    subprocess.run(["node", str(kit / "verify_project.js"), str(work / "token-out/code.js")], check=True)
 
 
 def verify_project(kit: Path, work: Path) -> None:
