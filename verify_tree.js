@@ -100,10 +100,11 @@ async function testStructure(t1) {
   assert.ok(bon.y > ba.y && bon.x === mot.x, 'Hết bề rộng một hàng thì xuống hàng');
   assert.ok(g1.width <= 2 * 60 + 2 * 532 + 80 && g1.width > 532 + 120, 'Nhóm rộng tối đa 2 luồng đầy đủ');
   assert.ok(named(areaA, 'Nhóm 3').y >= g1.y + g1.height, 'Nhóm trong khu xếp dọc theo order');
-  const fills = ['area', 'group', 'flow'].map((l) => U.levelOf(page, l)[0].fills[0]);
-  assert.equal(new Set(fills.map((f) => JSON.stringify(f.color))).size, 3, 'Mỗi cấp một màu khác nhau');
+  assert.equal(U.levelOf(page, 'area')[0].fills.length, 0, 'Khu (lớp ngoài cùng) trong suốt');
+  const fills = ['group', 'flow'].map((l) => U.levelOf(page, l)[0].fills[0]);
+  assert.equal(new Set(fills.map((f) => JSON.stringify(f.color))).size, 2, 'Nhóm và luồng khác màu');
   assert.ok(fills.every((f) => f.type === 'SOLID' && f.color.r >= 0.7 && f.color.g >= 0.8 && f.color.b >= 0.9 && f.color.b > f.color.r), 'Xanh nhạt, đủ sáng để tên Section đọc rõ');
-  assert.ok(fills[0].color.r < fills[1].color.r && fills[1].color.r < fills[2].color.r, 'Đậm dần từ trong ra ngoài: khu > nhóm > luồng');
+  assert.ok(fills[0].color.r < fills[1].color.r, 'Đậm dần từ trong ra ngoài: nhóm > luồng');
   for (const f of mine(root)) assert.ok(f.parent.getPluginData('treeLevel') === 'flow' && U.labelsOf(f.parent, f).length === 2, 'Nhãn text phụ vẫn còn trên khung');
   const snap = dump(root);
   const r2 = await open(t1, root).ok('updateDraft', A());

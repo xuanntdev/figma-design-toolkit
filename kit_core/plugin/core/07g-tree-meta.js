@@ -4,7 +4,7 @@
 // Nguồn meta: nhóm (order/title/area/flows) = extension + DRAFT_PLAN.groupOrders; luồng của màn = DRAFT_PLAN.screenFlows.
 
 const TREE = {
-  fills: { area: '#C9DDF7', group: '#DCEAFB', flow: '#EEF5FE' }, // xanh nhạt, đậm dần từ trong ra ngoài: khu > nhóm > luồng
+  fills: { area: null, group: '#DCEAFB', flow: '#EEF5FE' }, // khu trong suốt (null); nhóm > luồng xanh nhạt
   head: { root: 140, area: 140, group: 120, flow: 100 }, // chừa chỗ phía trên cho tên Section
   pad: 60, gap: 80, gapX: 56,
   flowCols: 2, // luồng đầy đủ perRow khung đứng tối đa mấy cột cạnh nhau trong một nhóm (1 = xếp dọc hết, nhóm lớn sẽ rất dài)
@@ -58,10 +58,10 @@ function trIsOldSection(n) {
 
 // Fill mặc định chỉ đặt cho Section plugin tạo (có tag treeFill); Section designer nhận theo tên giữ nguyên màu của họ.
 function trStyle(sec, level, fresh) {
-  const hex = TREE.fills[level];
+  const hex = TREE.fills[level] || 'none';
   const had = stTagOf(sec, 'treeFill');
   if ((fresh || had) && had !== hex) {
-    sec.fills = stSolid(hex);
+    sec.fills = hex === 'none' ? [] : stSolid(hex);
     stTag(sec, { treeFill: hex });
   }
 }
