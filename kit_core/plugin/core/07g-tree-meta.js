@@ -31,9 +31,22 @@ function trGroupInfo(id, node) {
   };
 }
 
+// Luồng của màn theo plan; null khi plan không có màn này.
 function trFlowOf(stem) {
   const f = trPlan() && trPlan().screenFlows && trPlan().screenFlows[stem];
-  return f ? { id: f.id, title: f.title, order: f.order } : { id: 'khac', title: TREE.fallback, order: 1e9 };
+  return f ? { id: f.id, title: f.title, order: f.order } : null;
+}
+
+// Luồng hiện tại của khung (cha là Section luồng); null khi khung ở nơi khác (bố cục cũ, Section nhóm).
+function trHintFlow(frame) {
+  const p = frame && frame.parent;
+  if (!p || p.type !== 'SECTION' || stTagOf(p, 'treeLevel') !== 'flow') return null;
+  return { id: stTagOf(p, 'treeKey').split('/').slice(1).join('/'), title: p.name, order: trOrderOf(p) };
+}
+
+// Luồng của màn: plan, không có trong plan thì luồng hiện tại của khung (`hint`), thật không biết mới là KHÁC.
+function trFlowFor(stem, hint) {
+  return trFlowOf(stem) || trHintFlow(hint) || { id: 'khac', title: TREE.fallback, order: 1e9 };
 }
 
 // Thứ tự khu = order nhỏ nhất của các nhóm thuộc khu (nhóm trong plan + nhóm của extension).
@@ -88,12 +101,12 @@ function trSection(parent, level, key, name, order) {
 // Số luồng khác nhau của mỗi nhóm: từ mọi màn của nhóm nhúng, mọi khung của plugin đang có và các ô của lô (cùng đáp số mỗi lượt).
 function trFlowCounts(items, targets) {
   const sets = new Map();
-  const add = (gid, stem) => {
+  const add = (gid, stem, frame) => {
     if (!sets.has(gid)) sets.set(gid, new Set());
-    sets.get(gid).add(trFlowOf(stem).id);
+    sets.get(gid).add(trFlowFor(stem, frame).id);
   };
   for (const g of stGroups()) g.screens.forEach((s) => add(g.id, s.stem || s.id));
-  for (const { frame, parent } of items) add(trGroupIdOf(frame, parent), stTagOf(frame, 'screenId'));
+  for (const { frame, parent } of items) add(trGroupIdOf(frame, parent), stTagOf(frame, 'screenId'), frame);
   for (const t of targets) add(t.group.id, t.screen.id);
   return new Map([...sets].map(([gid, set]) => [gid, set.size]));
 }
@@ -104,10 +117,11 @@ function trCollapsed(gid, counts) {
 }
 
 // Section lá của một màn (tạo đủ các cấp của cây dưới `root`); trả { flow, info } hoặc null khi không biết nhóm.
-function trFlowSection(root, gid, stem, groupNode, counts) {
+// `hint` = khung đang có của màn: plan không biết màn thì giữ luồng hiện tại của khung.
+function trFlowSection(root, gid, stem, groupNode, counts, hint) {
   if (!gid) return null;
   const g = trGroupInfo(gid, groupNode);
-  const f = trFlowOf(stem);
+  const f = trFlowFor(stem, hint);
   let sec = root;
   for (const level of stTreeLevels()) {
     if (level === 'area') sec = trSection(sec, 'area', g.area, g.area, trAreaOrder(g.area));

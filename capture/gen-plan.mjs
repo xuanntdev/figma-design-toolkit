@@ -68,6 +68,10 @@ for (const g of groups) {
 // order + title của MỌI nhóm đã chụp (kể cả nhóm không nhúng ở lô này) để plugin xếp lại nhóm dựng từ lượt trước.
 const groupOrders = Object.fromEntries(groups.map((g) => [g.id, { order: g.order, title: g.title, area: areaOf(g), flows: groupFlows[g.id].map(({ id, title, order }) => ({ id, title, order })) }]));
 
+// screenFlows + groupOrders luôn gồm MỌI màn/nhóm đã chụp (đã áp exclude), dù build lô nào: plugin xếp lại cả nhóm dựng từ lô trước,
+// thiếu màn ở đây thì màn của nhóm ngoài lô rơi vào luồng KHÁC.
+const screenFlows = Object.fromEntries(groups.flatMap((g) => g.screens.map((s) => [s.stem, screenFlow[s.stem]])));
+
 const flag = process.argv.indexOf('--groups');
 const wanted = flag > 0 ? (process.argv[flag + 1] || '').split(',').map((x) => x.trim()).filter(Boolean) : null;
 if (wanted) {
@@ -91,7 +95,7 @@ const plan = {
   screenIds: groups.flatMap((g) => g.screens.map((s) => s.stem)),
   themes: ['light'],
   groupOrders,
-  screenFlows: Object.fromEntries(groups.flatMap((g) => g.screens.map((s) => [s.stem, screenFlow[s.stem]]))),
+  screenFlows,
   replace: true,
 };
 fs.writeFileSync(path.join(KIT_ROOT, 'project/draft-plan.json'), JSON.stringify(plan, null, 2) + '\n');

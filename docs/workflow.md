@@ -67,7 +67,7 @@ Khu Hiện tại (`target: "current"`) là cây Section lồng nhau theo `sectio
   "screenFlows": { "orders-list": { "id": "list", "title": "DANH SÁCH", "order": 1 } } }
 ```
 
-Plan không có `area`/`screenFlows` thì khu và luồng đều là `KHÁC`. Section designer đã có cùng tên giữ màu của họ.
+Plan không có `area` thì khu là `KHÁC`; màn không có trong `screenFlows` giữ luồng hiện tại của khung (Section luồng cha), chỉ khi thật không biết mới vào luồng `KHÁC`. `capture/gen-plan.mjs --groups` vẫn ghi `screenFlows`/`groupOrders` của mọi nhóm đã chụp để build theo lô không làm nhóm ngoài lô rơi vào `KHÁC`. Section designer đã có cùng tên giữ màu của họ.
 
 ### Dọn `cleanup: true` (tuỳ chọn)
 

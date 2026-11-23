@@ -70,7 +70,8 @@ function localFindPage(args, opts) {
     if (p) return p;
   }
   for (const p of figma.root.children) {
-    const hasCur = p.children.some((n) => localIsSide(n, 'current', opts.currentName));
+    // layout=sections: Section gốc "Hiện tại" bị xoá thì trang đã dựng vẫn nhận ra bằng Section cây của plugin ở cấp trên cùng.
+    const hasCur = p.children.some((n) => localIsSide(n, 'current', opts.currentName) || (stLayoutTree() && trIsTree(n)));
     const hasImp = !stImprovedOn() || p.children.some((n) => localIsSide(n, 'improved', opts.improvedName));
     if (hasCur && hasImp) return p;
   }

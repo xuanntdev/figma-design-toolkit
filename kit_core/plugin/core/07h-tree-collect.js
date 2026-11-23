@@ -73,7 +73,7 @@ function trMove(node, to, moves, isFrame) {
 function trMigrate(root, index) {
   const moves = [];
   for (const { frame, parent } of index.items) {
-    const dest = trFlowSection(root, trGroupIdOf(frame, parent), stTagOf(frame, 'screenId'), stTagOf(frame, 'groupId') ? frame : parent, index.counts);
+    const dest = trFlowSection(root, trGroupIdOf(frame, parent), stTagOf(frame, 'screenId'), stTagOf(frame, 'groupId') ? frame : parent, index.counts, frame);
     if (!dest) continue;
     stTag(frame, stGroupTags({ id: dest.info.id, title: dest.info.title, order: dest.info.order }));
     const labels = stLabelsOf(parent, frame);

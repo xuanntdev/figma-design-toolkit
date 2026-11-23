@@ -1,5 +1,7 @@
 """Kiểm thử các tuỳ chọn trong design-sync.json: hai kịch bản dùng kit (A sửa trực tiếp, B sinh màn mới), kết hợp hai khu, từng tuỳ chọn."""
 
+import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -97,3 +99,27 @@ def build_sorting(kit: Path, work: Path) -> None:
     for name, sort in (("sort-off", False), ("sort-on", True)):
         runtime = config.runtime({"frame": FRAME, "target": "improved", "improved": True, "sortGroups": sort})
         build.build([reordered], work / "options" / name, runtime=runtime, plan={"themes": ["light"], "replace": True})
+
+
+def verify_gen_plan(kit: Path, work: Path) -> None:
+    """capture/gen-plan.mjs --groups: screenFlows/groupOrders vẫn gồm mọi màn/nhóm đã chụp (trừ màn exclude), gen.json chỉ của lô."""
+    root = work / "gen-plan-kit"
+    shutil.copytree(kit / "capture", root / "capture", ignore=shutil.ignore_patterns("node_modules"))
+    (root / "package.json").write_text("{}", encoding="utf-8")
+    shots = {"ga": ["ga-1", "ga-2"], "gb": ["gb-1", "gb-2"]}
+    for order, (gid, stems) in enumerate(shots.items(), 1):
+        snap = root / "project/snapshots" / gid
+        snap.mkdir(parents=True)
+        screens = [{"stem": s, "title": s} for s in stems]
+        for stem in stems:
+            (snap / f"{stem}.json").write_text("{}", encoding="utf-8")
+        (snap / "group.json").write_text(json.dumps({"id": gid, "title": gid, "order": order, "area": "KHU " + gid, "screens": screens}), encoding="utf-8")
+    (root / "project/flows.json").write_text(json.dumps({"ga": [{"id": "f1", "title": "LUỒNG", "screens": ["ga-1"]}]}), encoding="utf-8")
+    (root / "project/exclude.json").write_text(json.dumps({"exclude": [{"stem": "gb-2", "reason": "thử"}]}), encoding="utf-8")
+    subprocess.run(["node", str(root / "capture/gen-plan.mjs"), "--groups", "gb"], cwd=root, check=True)
+    plan = json.loads((root / "project/draft-plan.json").read_text(encoding="utf-8"))
+    assert plan["screenIds"] == ["gb-1"], plan["screenIds"]
+    assert sorted(plan["groupOrders"]) == ["ga", "gb"], plan["groupOrders"]
+    assert plan["screenFlows"]["ga-1"]["id"] == "f1" and plan["screenFlows"]["ga-2"]["title"] == "KHÁC", plan["screenFlows"]
+    assert sorted(plan["screenFlows"]) == ["ga-1", "ga-2", "gb-1"], "screenFlows gồm mọi màn đã chụp, trừ màn exclude"
+    assert [p.name for p in (root / "project/extension/data").glob("*.gen.json")] == ["gb.gen.json"]

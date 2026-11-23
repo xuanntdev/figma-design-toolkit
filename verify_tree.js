@@ -261,8 +261,27 @@ async function testReorder(t1, t2) {
   checkHug(page, 60);
 }
 
+// Build theo lô (plan t3: screenFlows chỉ có màn của lô g2): nhóm ngoài lô giữ luồng hiện tại của khung, không rơi vào KHÁC;
+// Section gốc bị xoá/đổi tên trang thì vẫn nhận lại trang đã dựng nhờ Section cây, không tạo trang mới.
+async function testBatchKeepsFlow(t1, t3) {
+  const root = newRoot();
+  await open(t1, root).ok('updateDraft', A());
+  const before = shape(pageOf(root));
+  const r = await open(t3, root).ok('updateDraft', A(['g2-a']));
+  eq(shape(pageOf(root)), before, 'Lô sau không đổi luồng của nhóm ngoài lô');
+  assert.ok(!all(root).some((n) => n.type === 'SECTION' && n.name === 'KHÁC'), 'Không có luồng KHÁC');
+  assert.equal(r.movedCount, 0);
+  const pages = root.children.length;
+  const page = pageOf(root);
+  page.name = 'Trang đổi tên';
+  const again = await open(t3, root).ok('updateDraft', A(['g2-a']));
+  assert.equal(root.children.length, pages, 'Không tạo trang mới');
+  assert.equal(again.builtCount, 0);
+  eq(shape(page), before);
+}
+
 (async () => {
-  const [t1, t2] = process.argv.slice(2);
+  const [t1, t2, t3] = process.argv.slice(2);
   await testStructure(t1);
   for (const mode of ['container', 'section']) {
     await testMigrate(t1, mode);
@@ -271,5 +290,6 @@ async function testReorder(t1, t2) {
   await testUndo(t1);
   await testUndoNative(t1);
   await testReorder(t1, t2);
+  await testBatchKeepsFlow(t1, t3);
   console.log('verify_tree.js: OK (cây khu → nhóm → luồng, di chuyển từ bố cục cũ, hoàn tác, sắp xếp lại)');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -11,7 +11,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
-from verify_config import SCENARIO_A, tree_plan, verify_options, verify_scenarios
+from verify_config import SCENARIO_A, tree_plan, verify_gen_plan, verify_options, verify_scenarios
 
 PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aLU8AAAAASUVORK5CYII="
 
@@ -50,6 +50,7 @@ def verify_kit(kit: Path, work: Path, packaged: bool) -> None:
     verify_simulation(kit, work, bundle)
     verify_scenarios(kit, work)
     verify_options(kit, work)
+    verify_gen_plan(kit, work)
     verify_project(kit, work)
 
 
@@ -153,7 +154,10 @@ def verify_tree(kit: Path, work: Path, runtime: dict) -> None:
     ext = kit / "tests" / "layout-extension"
     build.build([ext], work / "tree1", runtime=runtime, plan=tree_plan({"g1": "KHU A", "g2": "KHU B", "g3": "KHU A"}, f1))
     build.build([ext], work / "tree2", runtime=runtime, plan=tree_plan({"g1": "KHU B", "g2": "KHU A", "g3": "KHU B"}, f2))
-    subprocess.run(["node", str(kit / "verify_tree.js"), str(work / "tree1/code.js"), str(work / "tree2/code.js")], check=True)
+    batch = tree_plan({"g1": "KHU A", "g2": "KHU B", "g3": "KHU A"}, {"g2": f1["g2"]})  # lô chỉ có luồng của nhóm g2
+    build.build([ext], work / "tree3", runtime=runtime, plan=batch)
+    bundles = [str(work / name / "code.js") for name in ("tree1", "tree2", "tree3")]
+    subprocess.run(["node", str(kit / "verify_tree.js"), *bundles], check=True)
 
 
 def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:

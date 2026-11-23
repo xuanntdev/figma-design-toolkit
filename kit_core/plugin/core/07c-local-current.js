@@ -8,9 +8,10 @@ function trRootOf(run) {
   return run.page || stFindPage(run.opts.pageFeatures) || null;
 }
 
-// Một ô (màn + chủ đề) của lô: merge trong Section luồng của màn.
+// Một ô (màn + chủ đề) của lô: merge trong Section luồng của màn (khung đã có thì giữ luồng hiện tại khi plan không biết màn).
 function trApplyCell(root, t, o) {
-  const dest = trFlowSection(root, t.group.id, t.screen.id, null, o.counts);
+  const had = (o.cells.get(stKey(t.theme, t.screen.id)) || [])[0];
+  const dest = trFlowSection(root, t.group.id, t.screen.id, null, o.counts, had);
   const info = stCellInfo(t.group, t.screen, t.theme, o.themes);
   return stApplyCell(dest.flow, t, { replace: o.replace, batchId: o.batchId, info, tags: stGroupTags(t.group) });
 }
@@ -31,7 +32,7 @@ async function localRunTree(run, targets, plan, batchId) {
   await stPrepare();
   await stEnsureFonts();
   const index = trIndex(root, targets);
-  const o = { replace: plan.replace !== false, batchId, themes: stProjectThemes(plan), counts: index.counts };
+  const o = { replace: plan.replace !== false, batchId, themes: stProjectThemes(plan), counts: index.counts, cells: index.cells };
   const anchor = trAnchor(root);
   const moves = trMigrate(root, index);
   const proposals = targets.map((t, i) => {
