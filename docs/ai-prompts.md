@@ -1,5 +1,7 @@
 # Mẫu prompt cho AI dựng màn hình
 
+> Mọi prompt dưới đây ngầm yêu cầu tuân [nguyen-tac.md](nguyen-tac.md): dựng màn từ component dùng chung, token theo chuẩn Figma, không phá phần người đã sửa.
+
 ## 1. Dựng màn mới từ mã nguồn app + ảnh chụp
 
 > Đọc màn hình `<Tên màn>` trong mã nguồn (`<đường dẫn file>`) và ảnh chụp đính kèm.

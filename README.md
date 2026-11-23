@@ -32,6 +32,7 @@ Trong Figma Desktop: **Plugins → Development → Import plugin from manifest�
 
 ## Tài liệu
 
+- [**Nguyên tắc thiết kế khi sinh màn** (component dùng chung là bắt buộc, token chuẩn Figma…)](docs/nguyen-tac.md)
 - [Cài đặt, làm việc nhóm & cấu hình dự án](docs/setup.md)
 - [Hai cách dùng điển hình, Hiện tại / Cải tiến & bảo vệ bản duyệt](docs/workflow.md)
 - [Mẫu prompt cho AI (Cursor / Claude / Codex / AGY)](docs/ai-prompts.md)
