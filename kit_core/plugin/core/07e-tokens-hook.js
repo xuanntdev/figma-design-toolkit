@@ -17,6 +17,7 @@ async function tokHookRun(args) {
     assertCanWrite(args);
     const page = await stEnsurePage(stOpts(args).pageTokens);
     const value = await build(page);
+    if (typeof lkOnTokens === 'function') await lkOnTokens(page);
     stampFile();
     figma.commitUndo();
     return Object.assign({ ok: true }, value);

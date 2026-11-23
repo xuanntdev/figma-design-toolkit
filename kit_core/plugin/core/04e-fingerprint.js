@@ -28,7 +28,15 @@ function fpFill(n) {
   return [c.r, c.g, c.b, f[0].opacity == null ? 1 : f[0].opacity].map((v) => Math.round(v * 255)).join(',');
 }
 
+// Instance do engine link: băm tên + vị trí + giá trị property đã khai lúc dựng, không băm ruột (sửa component không đổi vân tay).
+function fpInstance(n, h) {
+  const row = typeof lkInstanceRow === 'function' ? lkInstanceRow(n) : null;
+  return row === null ? null : fpMix(h, row);
+}
+
 function fpNode(n, h, root) {
+  const inst = n.type === 'INSTANCE' && !root ? fpInstance(n, h) : null;
+  if (inst !== null) return inst;
   const text = n.type === 'TEXT';
   let geo = [n.x, n.y, n.width, n.height];
   if (root) geo = [n.width, n.height];

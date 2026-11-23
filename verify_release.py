@@ -121,6 +121,7 @@ def verify_layout(kit: Path, work: Path) -> None:
     subprocess.run(["node", str(kit / "verify_cleanup.js"), str(work / "cleanup-out/code.js")], check=True)
     verify_merge(kit, work, runtime)
     verify_tree(kit, work, runtime)
+    verify_link(kit, work, runtime)
 
 
 def verify_merge(kit: Path, work: Path, runtime: dict) -> None:
@@ -158,6 +159,29 @@ def verify_tree(kit: Path, work: Path, runtime: dict) -> None:
     build.build([ext], work / "tree3", runtime=runtime, plan=batch)
     bundles = [str(work / name / "code.js") for name in ("tree1", "tree2", "tree3")]
     subprocess.run(["node", str(kit / "verify_tree.js"), *bundles], check=True)
+
+
+def verify_link(kit: Path, work: Path, runtime: dict) -> None:
+    # 4f. Engine link (kit_core/plugin/core/07k..07o) với luật giả: instance + matchRun + token + vân tay ổn định, cả sync=merge lẫn sync=replace;
+    # extension chỉ khai token thì chỉ gắn biến, không khai gì thì chỉ khối thô
+    from kit_core import build, config
+
+    assert "link" not in runtime, "Engine link bắt buộc, không có cờ bật/tắt"
+    plan = {"screenIds": ["g1-a", "g1-b"], "themes": ["light"], "replace": True}
+    ext = kit / "tests" / "link-extension"
+    text = (ext / "01-ext.js").read_text(encoding="utf-8")
+    assert "linkRules: FAKE_RULES," in text and "linkTokens: FAKE_TOKENS," in text
+    variants = {"tokens-only": text.replace("linkRules: FAKE_RULES,", "linkRules: [],"), "none": text.replace("linkRules: FAKE_RULES,", "").replace("linkTokens: FAKE_TOKENS,", "")}
+    for name, code in variants.items():
+        (work / f"link-{name}-ext").mkdir()
+        (work / f"link-{name}-ext" / "01-ext.js").write_text(code, encoding="utf-8")
+    build.build([ext], work / "link-full", runtime=runtime, plan=plan)
+    for name in variants:
+        build.build([work / f"link-{name}-ext"], work / f"link-{name}", runtime=runtime, plan=plan)
+    bundles = [str(work / name / "code.js") for name in ("link-full", "link-tokens-only", "link-none")]
+    subprocess.run(["node", str(kit / "verify_link.js"), "merge", *bundles], check=True)
+    build.build([ext], work / "link-replace", runtime=config.runtime({}), plan=plan)
+    subprocess.run(["node", str(kit / "verify_link.js"), "replace", str(work / "link-replace/code.js")], check=True)
 
 
 def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:

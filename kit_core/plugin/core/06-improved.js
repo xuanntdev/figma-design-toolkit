@@ -4,12 +4,20 @@
 
 let ST_PREPARED = false;
 
-// The extension may need fonts or tokens ready before it draws; done once per plugin session.
-async function stPrepare() {
+// The extension may need fonts or tokens ready before it draws; extension.prepare runs once per plugin session.
+// The link engine (07k..07o) reloads its component library every run; opts.readOnly (preview) never builds anything.
+async function stPrepare(opts) {
+  if (typeof lkPrepare === 'function') await lkPrepare(opts);
   if (ST_PREPARED) return;
   const ext = stExtension();
   if (ext.prepare) await ext.prepare();
   ST_PREPARED = true;
+}
+
+// End of a build run: extension.finish (if any), then the text styles queued by the link engine.
+async function stFinish(ext) {
+  if (ext.finish) await ext.finish();
+  if (typeof lkFlush === 'function') await lkFlush();
 }
 
 function stFindScreen(id) {
@@ -72,7 +80,7 @@ async function cmdBuildImproved(args) {
       out.built.push(id + ':' + theme);
     }
   }
-  if (ext.finish) await ext.finish();
+  await stFinish(ext);
   stampFile();
   out.layout = await cmdEnsureLayout(args);
   return out;

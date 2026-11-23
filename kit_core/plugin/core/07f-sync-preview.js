@@ -41,7 +41,7 @@ function pvAction(frames, screen, run) {
 async function cmdPreviewSync(args) {
   await figma.loadAllPagesAsync();
   const run = localResolveRun(args);
-  await stPrepare();
+  await stPrepare({ readOnly: true });
   const themes = stProjectThemes(run.plan);
   const tree = run.target === 'current' && stLayoutTree();
   const root = tree ? trRootOf(run) : null;

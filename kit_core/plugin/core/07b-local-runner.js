@@ -162,7 +162,7 @@ async function localRunContainer(plan, targets, batchId, side) {
     const info = stCellInfo(t.group, t.screen, t.theme, stProjectThemes(plan));
     proposals.push(stApplyCell(container, t, { replace: true, batchId, tags, info }));
   }
-  if (ext.finish) await ext.finish();
+  await stFinish(ext);
   stampFile();
   await cmdEnsureLayout(plan);
   figma.commitUndo();
@@ -182,7 +182,7 @@ async function localRunSection(page, sides, targets, plan, batchId) {
       ? localPlaceInCurrent(sides.current, t, replace, batchId)
       : localPlaceInSection(sides.improved, t, replace, batchId);
   });
-  if (stExtension().finish) await stExtension().finish();
+  await stFinish(stExtension());
   stampFile();
   figma.commitUndo();
   return proposals;
