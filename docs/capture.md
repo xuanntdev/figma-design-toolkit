@@ -22,6 +22,17 @@ Pipeline cho dự án có sẵn web chạy được: **Playwright chụp màn (c
 3. Soát nhanh không cần Figma: `node capture/preview.mjs <group-id> [stem…]` dựng lại snapshot thành HTML rồi chụp `<stem>.preview.png` để so với `<stem>.png`.
 4. Dò màn trước khi viết kịch bản: `node capture/explore.mjs /route` (in tab/nút/cột bảng; `FIRST_ROW=1` để bấm dòng đầu bảng).
 
+## Dựng bằng component (engine link, bắt buộc ở lõi)
+
+Bộ dựng snapshot trong `capture/extension/` đưa mọi node qua engine link của lõi. Mặc định (chưa khai luật) màn dựng như trước: khối thô. Để dựng bằng component dùng chung, thêm các mô-đun luật + token vào extension của dự án:
+
+```sh
+cp capture/link-example/*.js project/extension/     # ví dụ: Button, Tag, App/Header khớp theo tên thẻ.class của trang mẫu
+python design_sync.py build
+```
+
+Rồi viết luật cho khối của chính web mình (`linkRules` / `linkTokens` / `buildTokens`, xem [workflow.md](workflow.md) mục 5), dùng `node capture/find-repeats.mjs` để biết khối nào lặp nhiều nhất. Kết quả **Cập nhật** có `link` (độ phủ instance và token, phần tử chưa có luật).
+
 ## Sinh plan và build
 
 Sau `init`, thay màn mẫu bằng bộ dựng snapshot có sẵn: `rm project/extension/01-screens.js && cp capture/extension/*.js project/extension/`. Rồi:

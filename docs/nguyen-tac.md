@@ -3,15 +3,15 @@
 Áp dụng cho mọi dự án dùng kit: người viết extension, AI sinh màn và người review đều theo bộ nguyên tắc này.
 Mục **bắt buộc** là phần lõi của kit; các mục còn lại là cấu hình mặc định khuyến nghị, đổi được trong `design-sync.json` (xem [setup.md](setup.md)).
 
-> Trạng thái: một số mục đang được hiện thực dần trong lõi (ghi chú *đang làm*). Tài liệu này là đích đến; khi mã chưa theo kịp, theo tài liệu.
+> Trạng thái: mục 1 đã có trong lõi (engine link, xem [workflow.md](workflow.md) mục 5). Các mục 2–3 là chuẩn cho trang Token & Component do extension dựng; khi mã extension chưa theo kịp, theo tài liệu.
 
 ## 1. Bắt buộc: dựng màn từ component dùng chung
 
 - Màn sinh ra phải **ghép từ instance** của component trong thư viện của file (trang Token & Component), không vẽ lại khối rời cho từng màn. Sửa component/token một chỗ thì mọi màn đổi theo.
-- Mọi node đi qua bộ liên kết của lõi: khớp luật → tạo instance đúng variant, gán thuộc tính (chữ, icon, bật/tắt); **chỉ khi không luật nào khớp** mới dựng khối thường, và khối đó được thống kê là "chưa liên kết" để bổ sung luật. Không có cờ tắt việc liên kết. *(đang làm)*
-- Khối **lặp lại giữa nhiều màn** phải là component: khung ứng dụng (thanh điều hướng, header, breadcrumb), thanh bộ lọc/tìm kiếm, card (tiêu đề + hành động), bảng (header, dòng, chân), phân trang, header/footer hộp thoại, khối nhãn–giá trị, lịch sử thao tác, trạng thái rỗng, nút nổi… Quét các màn để tìm khối lặp (≥5 màn) trước khi viết luật.
+- Mọi node đi qua bộ liên kết của lõi: khớp luật → tạo instance đúng variant, gán thuộc tính (chữ, icon, bật/tắt); **chỉ khi không luật nào khớp** mới dựng khối thường, và khối đó được thống kê là "chưa liên kết" để bổ sung luật. Không có cờ tắt việc liên kết; extension không khai luật thì dựng như cũ (khối thô).
+- Khối **lặp lại giữa nhiều màn** phải là component: khung ứng dụng (thanh điều hướng, header, breadcrumb), thanh bộ lọc/tìm kiếm, card (tiêu đề + hành động), bảng (header, dòng, chân), phân trang, header/footer hộp thoại, khối nhãn–giá trị, lịch sử thao tác, trạng thái rỗng, nút nổi… Quét các màn để tìm khối lặp (≥5 màn) bằng `node capture/find-repeats.mjs` trước khi viết luật.
 - Phần riêng của từng dự án chỉ là **bộ luật khớp** (vd theo class của thư viện UI đang dùng) khai báo ở extension; bộ liên kết ở lõi không biết gì về thư viện UI cụ thể.
-- Thư viện chưa có trong file thì lượt Cập nhật dựng trang Token & Component trước rồi mới dựng màn.
+- Thư viện chưa có trong file thì lượt Cập nhật dựng trang Token & Component trước rồi mới dựng màn (extension có `buildTokens`; cấu hình `tokens: "off"` tắt việc này, lúc đó thư viện phải có sẵn trong file).
 
 ## 2. Token theo chuẩn design system của Figma
 

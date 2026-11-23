@@ -74,7 +74,7 @@ Mọi khoá ngoài tên/cỡ khung đều **tuỳ chọn, mặc định giữ h�
 | `sync` | `"replace"` | `"replace"`: thay bản nháp `source=ai` của màn bằng bản dựng mới, chỉ giữ bản đã chọn (`status=chosen`) hoặc vẽ tay (`source=human`). `"merge"`: merge 3 chiều theo màn: không đổi nguồn thì bỏ qua, khung designer đã sửa tay (so vân tay) luôn giữ, nguồn đổi mà khung cũng đã sửa thì **xung đột** giải ngay trong plugin; có nút **Xuất thay đổi**. Trong chế độ Section kiểu `grid` (Hiện tại do designer vẽ sẵn) chỉ giữ bản sửa tay, chưa có xung đột. |
 | `preview` | `false` | `true`: **Cập nhật** hiện bảng **Xem trước** (bỏ qua / dựng mới / thay / giữ sửa tay / xung đột) rồi mới ghi khi bấm **Áp dụng**. `false`: ghi ngay. |
 | `cleanup` | `false` | `true`: mỗi lượt tự dọn khu thừa (khu Cải tiến khi `improved: false`; ô/vùng chủ đề không có trong `DRAFT_PLAN.themes`, vd phần Tối khi plan chỉ `["light"]`). Chỉ xoá node do plugin tạo và chưa được bảo vệ; node designer tự vẽ giữ lại và được báo. |
-| `tokens` | `"button"` | Trang **Token & Component** (extension có `buildTokens`): `"button"` = chỉ nút **Token**; `"update"` = làm mới thêm ở mỗi lượt Cập nhật; `"off"` = tắt. |
+| `tokens` | `"button"` | Trang **Token & Component** (extension có `buildTokens`): `"button"` = chỉ nút **Token**; `"update"` = làm mới thêm ở mỗi lượt Cập nhật; `"off"` = tắt (cũng tắt việc tự dựng trang này khi thiếu component, xem [workflow.md](workflow.md) mục 5). |
 
 Hai cấu hình thường gặp:
 
@@ -95,5 +95,7 @@ Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--exten
 | `python design_sync.py check` | Kiểm giới hạn mã sạch (≤ 300 dòng/file, ≤ 40 dòng/hàm) của `project/extension/` và cú pháp `project/dist/code.js`. |
 | `python design_sync.py manifest --root <dir> --version <v> --commit <sha>` | Tạo `current/manifest.json` kèm SHA-256 cho thư mục ảnh chụp tham chiếu. |
 | `node capture/capture.mjs <nhóm>` / `node capture/gen-plan.mjs` | Tuỳ chọn: chụp web thành snapshot rồi sinh plan, xem [capture.md](capture.md). |
+| `node capture/find-repeats.mjs [--dir] [--min-screens N]` | Tìm khối lặp giữa các màn của snapshot để chọn khối cần thành component, xem [workflow.md](workflow.md) mục 5. |
+| `node verify_link.js` / `node verify_link_sample.js` | Kiểm engine link (luật giả; ví dụ `capture/link-example` trên trang mẫu). `verify_release.py` đã gọi sẵn. |
 | `node verify_project.js [code.js]` | Chạy plugin của dự án trong Figma giả: dựng hết màn trong plan, thiếu font, chạy lại ổn định (theo `sync`), hook Token (theo `tokens`). |
 | `python verify_release.py` | Chạy trọn bộ kiểm thử tự động (yêu cầu Node.js). |

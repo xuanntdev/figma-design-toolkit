@@ -89,3 +89,26 @@ Ngoài `png-map`, tệp `data/<nhóm>.gen.json` có thể khai `{ "kind": "snaps
 
 - Nút **Hoàn tác** mặc định bị khoá khi mở plugin để không hoàn tác nhầm thao tác chỉnh tay trước đó trên Figma.
 - Nút chỉ mở sau khi bấm **Cập nhật** tạo khung mới thành công, gỡ đúng lượt vừa chạy (kể cả bước dọn/chuyển khung nếu có) và tự khoá lại ngay sau khi hoàn tác.
+
+## 5. Dựng màn bằng component liên kết (engine link)
+
+Theo [nguyen-tac.md](nguyen-tac.md) mục 1, màn dựng ra là **instance của component trên trang Token & Component + biến token**, không vẽ lại khối rời cho từng màn. Engine nằm ở lõi (`kit_core/plugin/core/07k..07o`), **không có cờ bật/tắt** và không phụ thuộc `target` / `layout` / `sync` / `preview` / `tokens`. Phần riêng của dự án chỉ là luật khớp, khai ở extension:
+
+| Khai báo trên `DESIGN_EXTENSION` | Ý nghĩa |
+| --- | --- |
+| `linkRules` | Mảng luật `{ name, match(node, ctx), matchRun?(list, i, ctx) }`, thử theo thứ tự, luật đầu khớp thắng. |
+| `linkTokens()` | Bảng tra token: `{ fill, stroke, text: { "#hex": "tên biến" }, radius: { 12: "tên biến" }, textStyles: [{ name, family, style, size, lineHeight }] }`. |
+| `linkTag` | Tên plugin data nhận ra component trong thư viện (mặc định `linkComp`); mỗi COMPONENT mang `<linkTag> = <khoá>`. |
+| `buildTokens(page)` | Dựng trang Token & Component (đã có từ mục "Trang Token & Component"); engine tự gọi khi file thiếu component. |
+
+**Cách hoạt động.** Mọi danh sách con (con của frame, gốc màn) dựng qua `lkBuildChildren(parent, list, ctx, raw)` — bộ dựng của extension gọi hàm này thay vì tự lặp. Với mỗi node: có luật khớp thì tạo instance (`createInstance`), chọn variant, đặt text/boolean property, đổi icon (INSTANCE_SWAP), ghi đè instance lồng; **không luật nào khớp chắc chắn** thì gọi `raw(parent, node, ctx)` (khối thô) rồi gắn token cho khối đó và thống kê là "chưa liên kết". Extension không khai `linkRules` / `linkTokens` thì engine chỉ gọi `raw`: màn dựng y như trước. `ctx` do extension đưa vào: `count(node)` (số node trong cây con, để tính độ phủ) và `label(node)` (nhãn thống kê).
+
+- **Luật một node**: `match(node, ctx)` trả `null` hoặc `{ comp, variant?, props?, swaps?, nested?, radius?, name?, size? }`: `comp` = khoá component; `variant` = `{ Type: "primary" }`; `props` = text/boolean property theo tên gốc; `swaps` = `{ Icon: { comp, variant } }`; `nested` = ghi đè instance lồng theo tên node (`props`, `swaps`, `visible`, `text`, `recolor`); `size: false` giữ cỡ của component thay vì cỡ node nguồn. Chỉ trả kết quả khi khớp **chắc chắn** (tên, màu, số con); không thì trả `null`.
+- **Luật một đoạn anh em** (`matchRun`): nhận cả danh sách con và vị trí `i`, trả `{ link, span, box: { x, y, w, h } }` để một instance thay `span` node liên tiếp (vd thanh phân trang = chữ + mũi tên + số trang + ô chọn). Luật có thể chỉ khai `matchRun`.
+- **Gắn token** cho khối thô: fill / viền / màu chữ khớp hex → biến Color; bo góc khớp số → biến Radius; chữ khớp (family, style, cỡ, line-height px) → text style (áp ở cuối lượt, nên dựng chữ phải đặt `lineHeight` px đúng CSS). Không khớp thì giữ giá trị thô và ghi vào `tokenMiss`.
+- **Self-heal**: đầu mỗi lượt Cập nhật engine đọc lại component và biến từ trang Token; file chưa có thì tự dựng trang Token trước (cần `buildTokens`, và `tokens` khác `"off"`) rồi mới dựng màn; bước đó là một bước hoàn tác riêng nên **Hoàn tác** chỉ gỡ khung màn. **Xem trước** chỉ đọc, không dựng gì.
+- **Vân tay / merge**: vân tay của instance = tên + vị trí + giá trị các property đã khai lúc dựng (plugin data `lk`), không băm ruột; dùng được cho cả `sync: "replace"` lẫn `"merge"`. Sửa component gốc (đổi ruột, thêm property, đổi biến) không làm khung bị coi là sửa tay; designer đổi property / variant / swap của instance thì bị coi là sửa tay (`merge` giữ nguyên và báo xung đột khi nguồn đổi).
+- **Thống kê**: kết quả **Cập nhật** có `link`: `linkedPct` (% node thành instance), `byComp` / `byRule`, `missing` (luật khớp nhưng thiếu component), `errors` (luật ném lỗi, lượt vẫn chạy), `tokens.<fill|stroke|text|radius|textStyle>` (`bound/total/pct`), `tokenMiss` (giá trị chưa có token) và `unmatchedTop` (phần tử chưa có luật, nhiều nhất trước) để biết bổ sung luật nào.
+- **Tìm khối lặp trước khi viết luật**: `node capture/find-repeats.mjs [--dir project/snapshots] [--min-screens 5] [--json out.json]` băm cấu trúc cây con của snapshot (bỏ chữ dữ liệu, vị trí, kích thước) và in khối lặp giữa nhiều màn, khối lớn nhất trước; khối nào lặp ≥ 5 màn thì nên là component.
+- **Ví dụ chạy được**: [`capture/link-example/`](../capture/link-example) (Button, Tag, App/Header + luật theo tên `thẻ.class`, token mẫu) trên `capture/sample-site`; cách dùng ở [capture.md](capture.md). `tests/link-extension/` là bản luật giả thuần dữ liệu dùng để kiểm lõi.
+
