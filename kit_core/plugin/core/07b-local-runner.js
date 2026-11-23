@@ -8,6 +8,7 @@ function localAllGroups() {
   return stGroups().map((g) => ({
     id: g.id,
     title: g.title,
+    order: g.order,
     subtitle: g.subtitle || '',
     screens: g.screens.map((s) => ({
       id: s.id || s.stem,
@@ -59,7 +60,7 @@ function localFindPage(args, opts) {
   }
   for (const p of figma.root.children) {
     const hasCur = p.children.some((n) => localIsSide(n, 'current', opts.currentName));
-    const hasImp = p.children.some((n) => localIsSide(n, 'improved', opts.improvedName));
+    const hasImp = !stImprovedOn() || p.children.some((n) => localIsSide(n, 'improved', opts.improvedName));
     if (hasCur && hasImp) return p;
   }
   return null;
@@ -87,7 +88,8 @@ function localFindRefFrame(refGroup, spec) {
   const byTag = refGroup.children.find((n) => n.type === 'FRAME' && stTagOf(n, 'screenId') === spec.id);
   if (byTag) return byTag;
   return refGroup.children.find((n) => n.type === 'FRAME'
-    && (n.name === spec.title || n.name.startsWith(spec.id) || n.name.startsWith(spec.title + ' ·'))) || null;
+    && (n.name === spec.title || n.name.startsWith(spec.id) || n.name.startsWith(spec.title + ' ·')
+      || n.name.endsWith(' · ' + spec.title))) || null;
 }
 
 // Horizontal distance between two frames placed side by side (frame width from design-sync.json + gutter).
@@ -166,7 +168,7 @@ function localPlaceInSection(improvedSide, target, replace, batchId) {
     };
   }
   drafts.forEach((n) => n.remove());
-  const frame = stExtension().build(target.screen.raw, target.theme);
+  const frame = stBuildFrame(target.screen.raw, target.theme);
   group.appendChild(frame);
   frame.x = slot.x + kept.length * localStep();
   frame.y = slot.y;
@@ -187,15 +189,7 @@ async function localRunContainer(plan, targets, batchId, side) {
   for (let i = 0; i < targets.length; i += 1) {
     const t = targets[i];
     figma.ui.postMessage({ type: 'PLUGIN_PROGRESS', pct: Math.round(((i + 1) / targets.length) * 90), text: 'Đang cập nhật ' + t.screen.title + '…' });
-    const r = stReplaceAi(container, t.screen.id, t.theme);
-    const frame = ext.build(t.screen.raw, t.theme);
-    container.appendChild(frame);
-    stTag(frame, { source: 'ai', status: 'draft', screenId: t.screen.id, theme: t.theme, variant: r.kept, batchId });
-    if (side === 'current') stTag(frame, { role: 'cell' });
-    proposals.push({
-      groupId: t.group.id, groupTitle: t.group.title, screenId: t.screen.id,
-      theme: t.theme, frameId: frame.id, reused: false, replaced: r.replaced, keptProtected: r.kept,
-    });
+    proposals.push(mgApply(container, t, { replace: true, batchId, tags: stGroupTags(t.group) }));
   }
   if (ext.finish) await ext.finish();
   stampFile();
@@ -204,16 +198,15 @@ async function localRunContainer(plan, targets, batchId, side) {
   return proposals;
 }
 
-// Section tree: draw into "Cải tiến" mirroring "Hiện tại", or straight into "Hiện tại" when target=current.
+// Section tree (target=improved): draw into "Cải tiến" mirroring "Hiện tại" (Sáng/Tối → nhóm do designer vẽ).
 async function localRunSection(page, sides, targets, plan, batchId) {
   if (figma.currentPage.id !== page.id) await figma.setCurrentPageAsync(page);
   await stPrepare();
+  await stEnsureFonts();
   const replace = plan.replace !== false;
   const proposals = targets.map((t, idx) => {
     figma.ui.postMessage({ type: 'PLUGIN_PROGRESS', pct: Math.round(((idx + 1) / targets.length) * 92), text: 'Đang cập nhật ' + t.screen.title + '…' });
-    return sides.target === 'current'
-      ? localPlaceInCurrent(sides.current, t, replace, batchId)
-      : localPlaceInSection(sides.improved, t, replace, batchId);
+    return localPlaceInSection(sides.improved, t, replace, batchId);
   });
   if (stExtension().finish) await stExtension().finish();
   stampFile();
@@ -221,29 +214,51 @@ async function localRunSection(page, sides, targets, plan, batchId) {
   return proposals;
 }
 
-async function cmdUpdateDraft(args) {
-  assertCanWrite(args);
-  await figma.loadAllPagesAsync();
+// Chung cho Xem trước và Cập nhật: plan, đích, đích đến (Section/container) và các ô sẽ xử lý (không ghi gì).
+function localResolveRun(args) {
   const plan = Object.assign({}, localDefaultPlan(), args || {});
   const screenIds = [...new Set(plan.screenIds || [])];
-  const themes = [...new Set(plan.themes || ['light', 'dark'])];
+  const themes = stFilterThemes([...new Set(plan.themes || ['light', 'dark'])]);
   const opts = stOpts(plan);
   const target = stTarget(plan);
   const page = localFindPage(plan, opts);
   const currentSide = page && page.children.find((n) => localIsSide(n, 'current', opts.currentName));
-  const improvedSide = page && page.children.find((n) => localIsSide(n, 'improved', opts.improvedName));
+  const improvedSide = page && stImprovedOn() && page.children.find((n) => localIsSide(n, 'improved', opts.improvedName));
   const targets = localValidateTargets(currentSide, screenIds, themes, target);
+  return { plan, opts, target, page, currentSide, improvedSide, targets, sectionMode: !!(currentSide && currentSide.type === 'SECTION') };
+}
+
+// Chạy lượt dựng theo chế độ: cây Section (target=current) hoặc Cải tiến (Section mirror / container). Trả { proposals, mode, extra }.
+async function localRunMode(run, batchId) {
+  const { plan, target, targets, sectionMode } = run;
+  if (target === 'current') {
+    const r = await localRunTree(run, targets, plan, batchId);
+    return { proposals: r.proposals, mode: 'tree', extra: r };
+  }
+  if (sectionMode) {
+    const sides = { current: run.currentSide, improved: run.improvedSide };
+    return { proposals: await localRunSection(run.page, sides, targets, plan, batchId), mode: 'section', extra: {} };
+  }
+  return { proposals: await localRunContainer(plan, targets, batchId, target), mode: 'container', extra: {} };
+}
+
+async function cmdUpdateDraft(args) {
+  assertCanWrite(args);
+  await figma.loadAllPagesAsync();
+  const run = localResolveRun(args);
+  stResetEdited();
+  const cleanup = await stCleanup(run.opts);
   const batchId = 'batch-' + Date.now();
-  const sectionMode = !!(currentSide && currentSide.type === 'SECTION');
-  const proposals = sectionMode
-    ? await localRunSection(page, { current: currentSide, improved: improvedSide, target }, targets, plan, batchId)
-    : await localRunContainer(plan, targets, batchId, target);
+  const { proposals, mode, extra } = await localRunMode(run, batchId);
   const createdIds = proposals.filter((p) => !p.reused).map((p) => p.frameId);
   const groups = localSummarizeGroups(proposals);
-  if (createdIds.length) LOCAL_LAST_BATCH = { batchId, frameIds: createdIds, groups };
+  const moves = extra.moves || [];
+  if (extra.notes) cleanup.notes.push(...extra.notes);
+  if (createdIds.length || moves.length) LOCAL_LAST_BATCH = { batchId, frameIds: createdIds, groups, moves, rootId: extra.rootId };
   return {
-    mode: sectionMode ? 'section' : 'container', target,
-    proposals, groups, builtCount: createdIds.length,
+    mode, target: run.target, cleanup, editedKept: stEditedCount(),
+    proposals, groups, builtCount: createdIds.length, merge: mgSummarize(proposals),
+    movedCount: moves.filter((m) => m.frame).length,
     reusedCount: proposals.filter((p) => p.reused).length,
     keptProtected: proposals.reduce((sum, p) => sum + (p.keptProtected || 0), 0),
     batchId,
@@ -251,10 +266,10 @@ async function cmdUpdateDraft(args) {
 }
 
 async function cmdRollbackDraft() {
-  if (!LOCAL_LAST_BATCH || !LOCAL_LAST_BATCH.frameIds.length) {
+  const batch = LOCAL_LAST_BATCH;
+  if (!batch || !(batch.frameIds.length || (batch.moves || []).length)) {
     throw new Error('Chưa có lượt cập nhật nào trong phiên này để hoàn tác.');
   }
-  const batch = LOCAL_LAST_BATCH;
   LOCAL_LAST_BATCH = null;
   if (typeof figma.triggerUndo === 'function') {
     figma.triggerUndo();
@@ -264,10 +279,15 @@ async function cmdRollbackDraft() {
   for (const id of batch.frameIds) {
     const node = await figma.getNodeByIdAsync(id);
     if (node && stTagOf(node, 'source') === 'ai' && stTagOf(node, 'status') !== 'chosen') {
+      const keepId = stTagOf(node, 'conflictOf');
+      const keep = keepId ? await figma.getNodeByIdAsync(keepId) : null;
+      if (node.parent) stDropLabels(node.parent, node);
       node.remove();
+      if (keep && !keep.removed) stClearConflict(keep.parent, keep);
       removed += 1;
     }
   }
-  if (removed > 0) figma.commitUndo();
+  await trRestoreMoves(batch);
+  figma.commitUndo();
   return { mode: 'batch', rolledBackCount: removed, groups: batch.groups || [] };
 }
