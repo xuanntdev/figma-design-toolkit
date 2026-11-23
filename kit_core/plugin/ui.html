@@ -83,8 +83,8 @@
   <div class="actions">
     <button id="btnUpdate" class="btn-primary">Cập nhật</button>
     <button id="btnRollback" class="btn-secondary" disabled>Hoàn tác</button>
-    <button id="btnExport" class="btn-secondary" title="Xuất JSON các màn đã sửa tay / đang xung đột để lưu vào repo">Xuất thay đổi</button>
-    <button id="btnTokens" class="btn-secondary" title="Chỉ làm mới trang Token &amp; Component (extension có buildTokens)">Token</button>
+    <button id="btnExport" class="btn-secondary" style="display:none" title="Xuất JSON các màn đã sửa tay / đang xung đột để lưu vào repo">Xuất thay đổi</button>
+    <button id="btnTokens" class="btn-secondary" style="display:none" title="Chỉ làm mới trang Token &amp; Component (extension có buildTokens)">Token</button>
   </div>
 
   <div id="prog" class="prog">
@@ -261,6 +261,7 @@
       try {
         cachedCat = await callMain('getCatalog', {});
         renderPlan(cachedCat);
+        applySettings(cachedCat.settings || {});
       } catch (err) {
         setStatus('Lỗi: ' + err.message, 'err');
       }

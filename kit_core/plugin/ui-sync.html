@@ -28,6 +28,20 @@
   let applyBar = null;
   let cfPanel = null;
 
+  // Theo design-sync.json (qua getCatalog): `preview` bật bước Xem trước, `sync: merge` mới có Xuất thay đổi, `tokens` quyết định nút Token.
+  function applySettings(s) {
+    document.getElementById('btnExport').style.display = s.sync === 'merge' ? '' : 'none';
+    document.getElementById('btnTokens').style.display = s.tokens && s.tokens !== 'off' ? '' : 'none';
+  }
+
+  function previewOn() {
+    return !!(cachedCat && cachedCat.settings && cachedCat.settings.preview);
+  }
+
+  function mergeOn() {
+    return !!(cachedCat && cachedCat.settings && cachedCat.settings.sync === 'merge');
+  }
+
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -106,7 +120,8 @@
       canRollback = (res.builtCount || 0) + (res.movedCount || 0) > 0;
       const notes = res.cleanup && Array.isArray(res.cleanup.notes) ? res.cleanup.notes : [];
       const created = listOf(res.merge, 'create').length;
-      setStatus('Xong: ' + created + ' dựng mới · ' + c.replace + ' thay · ' + c.conflict + ' xung đột.' + (notes.length ? ' ' + notes.join(' ') : ''), c.conflict ? 'err' : 'ok');
+      const conflicts = mergeOn() ? ' · ' + c.conflict + ' xung đột' : '';
+      setStatus('Xong: ' + created + ' dựng mới · ' + c.replace + ' thay' + conflicts + '.' + (notes.length ? ' ' + notes.join(' ') : ''), c.conflict ? 'err' : 'ok');
       await refreshConflicts();
     } catch (err) {
       fill.style.width = '0%';
@@ -196,7 +211,7 @@
     cfPanel.style.display = 'none';
     actions.before(cfPanel);
     actions.before(applyBar);
-    btnUpdate.onclick = runPreview;
+    btnUpdate.onclick = () => (previewOn() ? runPreview() : runApply());
     document.getElementById('btnExport').onclick = runExport;
     refreshConflicts().catch(() => {});
   })();

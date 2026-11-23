@@ -25,7 +25,8 @@ function stSameCell(node, id, theme) {
 }
 
 function stIsProtected(node) {
-  return stTagOf(node, 'status') === 'chosen' || stTagOf(node, 'source') === 'human' || stIsEdited(node);
+  // Giữ bản đã chọn / vẽ tay; chế độ sync=merge còn giữ cả khung `ai` mà designer đã sửa tay (so vân tay).
+  return stTagOf(node, 'status') === 'chosen' || stTagOf(node, 'source') === 'human' || (stSyncMerge() && stIsEdited(node));
 }
 
 // Removes the unprotected ai nodes of this cell; returns how many were replaced and how many were kept.

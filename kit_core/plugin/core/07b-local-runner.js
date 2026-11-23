@@ -29,9 +29,20 @@ function localDefaultPlan() {
   };
 }
 
+// Tuỳ chọn hành vi (design-sync.json) mà ui.html cần để hiện/ẩn nút và chọn luồng Cập nhật.
+function localSettings() {
+  return {
+    layout: stLayoutTree() ? 'sections' : 'grid',
+    sync: stSyncMerge() ? 'merge' : 'replace',
+    preview: stPreviewOn(),
+    tokens: tokHookBuilder() ? stTokensMode() : 'off',
+  };
+}
+
 function localCatalog() {
   return {
     version: PLUGIN_VERSION,
+    settings: localSettings(),
     defaultPlan: localDefaultPlan(),
     groups: localAllGroups().map((g) => ({
       id: g.id, title: g.title, subtitle: g.subtitle,
@@ -64,50 +75,6 @@ function localFindPage(args, opts) {
     if (hasCur && hasImp) return p;
   }
   return null;
-}
-
-function localMirrorSection(parent, ref, tagKey, tagVal) {
-  let sec = parent.children.find((n) => n.type === 'SECTION'
-    && (stTagOf(n, tagKey) === tagVal || n.name === ref.name));
-  if (!sec) {
-    sec = figma.createSection();
-    parent.appendChild(sec);
-  }
-  sec.name = ref.name;
-  sec.x = ref.x;
-  sec.y = ref.y;
-  sec.resize(Math.max(sec.width, ref.width), Math.max(sec.height, ref.height));
-  if (Array.isArray(ref.fills)) sec.fills = ref.fills.slice();
-  if (Array.isArray(ref.strokes)) sec.strokes = ref.strokes.slice();
-  if (typeof ref.cornerRadius === 'number') sec.cornerRadius = ref.cornerRadius;
-  stTag(sec, { [tagKey]: tagVal });
-  return sec;
-}
-
-function localFindRefFrame(refGroup, spec) {
-  const byTag = refGroup.children.find((n) => n.type === 'FRAME' && stTagOf(n, 'screenId') === spec.id);
-  if (byTag) return byTag;
-  return refGroup.children.find((n) => n.type === 'FRAME'
-    && (n.name === spec.title || n.name.startsWith(spec.id) || n.name.startsWith(spec.title + ' ·')
-      || n.name.endsWith(' · ' + spec.title))) || null;
-}
-
-// Horizontal distance between two frames placed side by side (frame width from design-sync.json + gutter).
-function localStep() {
-  return ST_GRID.cellW + 56;
-}
-
-function localResolveSlot(targetGroup, refGroup, spec, groupSpec) {
-  const refFrame = localFindRefFrame(refGroup, spec);
-  if (refFrame) return { x: refFrame.x, y: refFrame.y };
-  const frames = [...refGroup.children, ...targetGroup.children].filter((n) => n.type === 'FRAME');
-  if (!frames.length) return { x: 60, y: 90 };
-  const xs = [...new Set(frames.map((f) => f.x))].sort((a, b) => a - b);
-  const step = xs.length > 1 ? Math.max(ST_GRID.cellW + 40, xs[1] - xs[0]) : localStep();
-  const idx = groupSpec.screens.findIndex((s) => s.id === spec.id);
-  const col = Math.max(0, idx) % ST_GRID.perRow;
-  const row = Math.floor(Math.max(0, idx) / ST_GRID.perRow);
-  return { x: (xs[0] || 60) + col * step, y: (frames[0].y || 90) + row * (ST_GRID.cellH + ST_GRID.gapY) };
 }
 
 function localValidateTargets(currentSide, screenIds, themes, side) {
@@ -180,6 +147,7 @@ function localPlaceInSection(improvedSide, target, replace, batchId) {
   };
 }
 
+// Khung do plugin dựng trong container Hiện tại là ô ảnh (role=cell) để cmdCurrentApply/bố cục nhận ra.
 async function localRunContainer(plan, targets, batchId, side) {
   await cmdEnsureLayout(plan);
   const container = await stRequireContainer(plan, side);
@@ -189,7 +157,9 @@ async function localRunContainer(plan, targets, batchId, side) {
   for (let i = 0; i < targets.length; i += 1) {
     const t = targets[i];
     figma.ui.postMessage({ type: 'PLUGIN_PROGRESS', pct: Math.round(((i + 1) / targets.length) * 90), text: 'Đang cập nhật ' + t.screen.title + '…' });
-    proposals.push(mgApply(container, t, { replace: true, batchId, tags: stGroupTags(t.group) }));
+    const tags = Object.assign(stGroupTags(t.group), side === 'current' ? { role: 'cell' } : {});
+    const info = stCellInfo(t.group, t.screen, t.theme, stProjectThemes(plan));
+    proposals.push(stApplyCell(container, t, { replace: true, batchId, tags, info }));
   }
   if (ext.finish) await ext.finish();
   stampFile();
@@ -198,7 +168,8 @@ async function localRunContainer(plan, targets, batchId, side) {
   return proposals;
 }
 
-// Section tree (target=improved): draw into "Cải tiến" mirroring "Hiện tại" (Sáng/Tối → nhóm do designer vẽ).
+// Section mode (layout=grid): target=improved draws into "Cải tiến" mirroring "Hiện tại" (Sáng/Tối → nhóm do designer vẽ);
+// target=current draws straight into "Hiện tại" (Sáng/Tối → nhóm → khung).
 async function localRunSection(page, sides, targets, plan, batchId) {
   if (figma.currentPage.id !== page.id) await figma.setCurrentPageAsync(page);
   await stPrepare();
@@ -206,7 +177,9 @@ async function localRunSection(page, sides, targets, plan, batchId) {
   const replace = plan.replace !== false;
   const proposals = targets.map((t, idx) => {
     figma.ui.postMessage({ type: 'PLUGIN_PROGRESS', pct: Math.round(((idx + 1) / targets.length) * 92), text: 'Đang cập nhật ' + t.screen.title + '…' });
-    return localPlaceInSection(sides.improved, t, replace, batchId);
+    return sides.target === 'current'
+      ? localPlaceInCurrent(sides.current, t, replace, batchId)
+      : localPlaceInSection(sides.improved, t, replace, batchId);
   });
   if (stExtension().finish) await stExtension().finish();
   stampFile();
@@ -224,19 +197,22 @@ function localResolveRun(args) {
   const page = localFindPage(plan, opts);
   const currentSide = page && page.children.find((n) => localIsSide(n, 'current', opts.currentName));
   const improvedSide = page && stImprovedOn() && page.children.find((n) => localIsSide(n, 'improved', opts.improvedName));
-  const targets = localValidateTargets(currentSide, screenIds, themes, target);
-  return { plan, opts, target, page, currentSide, improvedSide, targets, sectionMode: !!(currentSide && currentSide.type === 'SECTION') };
+  // layout=sections: Hiện tại là cây Section của plugin, không phải cấu trúc Sáng/Tối để gương sang Cải tiến.
+  const sectionMode = !stLayoutTree() && !!(currentSide && currentSide.type === 'SECTION');
+  const targets = localValidateTargets(sectionMode ? currentSide : null, screenIds, themes, target);
+  return { plan, opts, target, page, currentSide, improvedSide, targets, sectionMode };
 }
 
-// Chạy lượt dựng theo chế độ: cây Section (target=current) hoặc Cải tiến (Section mirror / container). Trả { proposals, mode, extra }.
+// Chạy lượt dựng theo chế độ: cây Section (layout=sections, target=current), Section (layout=grid, Hiện tại là Section) hoặc container.
+// Trả { proposals, mode, extra }.
 async function localRunMode(run, batchId) {
   const { plan, target, targets, sectionMode } = run;
-  if (target === 'current') {
+  if (target === 'current' && stLayoutTree()) {
     const r = await localRunTree(run, targets, plan, batchId);
     return { proposals: r.proposals, mode: 'tree', extra: r };
   }
   if (sectionMode) {
-    const sides = { current: run.currentSide, improved: run.improvedSide };
+    const sides = { current: run.currentSide, improved: run.improvedSide, target };
     return { proposals: await localRunSection(run.page, sides, targets, plan, batchId), mode: 'section', extra: {} };
   }
   return { proposals: await localRunContainer(plan, targets, batchId, target), mode: 'container', extra: {} };
@@ -247,7 +223,7 @@ async function cmdUpdateDraft(args) {
   await figma.loadAllPagesAsync();
   const run = localResolveRun(args);
   stResetEdited();
-  const cleanup = await stCleanup(run.opts);
+  const cleanup = stCleanupOn() ? await stCleanup(run.opts) : { removed: [], kept: [], notes: [] };
   const batchId = 'batch-' + Date.now();
   const { proposals, mode, extra } = await localRunMode(run, batchId);
   const createdIds = proposals.filter((p) => !p.reused).map((p) => p.frameId);

@@ -5,6 +5,7 @@
 
 async function stRequireContainer(args, kind) {
   const o = stOpts(args);
+  if (kind === 'current' && stLayoutTree()) throw new Error('layout=sections vẽ Hiện tại bằng cây Section, không có khung Hiện tại để nhận ảnh chụp (dùng layout=grid).');
   await figma.loadAllPagesAsync();
   const page = stFindPage(o.pageFeatures);
   const c = page && stFindContainer(page, kind);

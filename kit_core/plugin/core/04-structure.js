@@ -212,7 +212,8 @@ async function stSetup(args) {
   await stEnsureFonts();
   const features = await stEnsurePage(o.pageFeatures);
   const tokens = await stEnsurePage(o.pageTokens);
-  const current = stEnsureContainer(features, 'current', o.currentName);
+  // layout=sections draws "Hiện tại" as a Section tree, so there is no current container to keep on the grid.
+  const current = stLayoutTree() ? null : stEnsureContainer(features, 'current', o.currentName);
   const improved = stImprovedOn() ? stEnsureContainer(features, 'improved', o.improvedName) : null;
   return { o, features, tokens, current, improved };
 }
@@ -237,19 +238,21 @@ async function cmdEnsureLayout(args) {
   const sides = [s.current, s.improved].filter(Boolean);
   const layout = stComputeLayout(stLayoutGroups(sides), stSlots(s.current, s.improved), stLayoutThemes(s.o), stHeights(s.current, s.improved));
   for (const c of sides) c.resize(layout.width, layout.height);
-  s.current.x = 0;
-  s.current.y = 0;
-  stReposition(s.current, layout, 'current');
-  stRefreshDecor(s.current, layout, 'current', s.o);
+  if (s.current) {
+    s.current.x = 0;
+    s.current.y = 0;
+    stReposition(s.current, layout, 'current');
+    stRefreshDecor(s.current, layout, 'current', s.o);
+  }
   if (s.improved) {
-    s.improved.x = layout.width + ST_GRID.containerGap;
+    s.improved.x = s.current ? layout.width + ST_GRID.containerGap : stTreeRight(s.features);
     s.improved.y = 0;
     stReposition(s.improved, layout, 'improved');
     stRefreshDecor(s.improved, layout, 'improved', s.o);
   }
   return {
     pages: [s.features.name, s.tokens.name], pageCount: figma.root.children.length,
-    current: s.current.id, improved: s.improved ? s.improved.id : null, width: layout.width, height: layout.height,
+    current: s.current ? s.current.id : null, improved: s.improved ? s.improved.id : null, width: layout.width, height: layout.height,
     cells: Object.keys(layout.cells).length,
   };
 }
