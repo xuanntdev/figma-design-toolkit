@@ -18,9 +18,11 @@ flowchart LR
 
 ## Bắt đầu nhanh
 
+Mỗi dự án clone kit thành repo thiết kế của chính dự án: đặt tên repo theo dự án và đặt tên plugin (`--name`) theo dự án.
+
 ```sh
-git clone https://github.com/xuanntdev/figma-design-toolkit.git my-app-design
-cd my-app-design
+git clone https://github.com/xuanntdev/figma-design-toolkit.git <dự-án>-design
+cd <dự-án>-design
 python design_sync.py init --name "Tên dự án" --empty
 python design_sync.py build
 python design_sync.py doctor
@@ -39,8 +41,6 @@ Trong Figma Desktop, chọn **Plugins → Development → Import plugin from man
 | `docs/` | Hướng dẫn cài đặt, tích hợp và sử dụng |
 | `tests/`, `verify_release.py` | Ca kiểm và lệnh chạy toàn bộ |
 | `example/`, `capture/` | Màn mẫu và công cụ nhập ảnh tham chiếu tùy chọn |
-
-Repo đã có sẵn có thể lấy toolkit về làm dependency cục bộ. Cấu hình và extension nằm trong repo dự án. [Hướng dẫn tích hợp](docs/setup.md#dùng-toolkit-từ-một-repo-dự-án-có-sẵn)
 
 ## Tài liệu
 

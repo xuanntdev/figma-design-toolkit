@@ -7,7 +7,7 @@ description: Set up this Figma Design Toolkit, read the connected Figma selectio
 
 ## Xác định dự án
 
-- Đọc `AGENTS.md` của repo người dùng đang làm. Dùng thư mục dự án đã khai báo ở đó. Khi repo dự án có `design-sync.json` ở gốc, dùng `--project-dir .`. Nếu repo chứa toolkit ở gốc và cấu hình ở `project/design-sync.json`, dùng mặc định của CLI. Repo có thư mục như `figma/` truyền chính thư mục đó bằng `--project-dir` trước lệnh con.
+- Repo dự án là bản clone của kit. Cấu hình nằm ở `project/design-sync.json`; chạy `python design_sync.py <lệnh>` từ gốc repo.
 - Với repo chỉ có kit, chạy `python design_sync.py init --name "<tên dự án>" --empty`, `build` và `doctor`. Giữ cấu hình khi dự án đã được khởi tạo. Cách thiết lập repo riêng có ở [hướng dẫn setup](../../../docs/setup.md).
 - Giữ một plugin cho mỗi dự án. Dùng cùng ID và đường dẫn manifest cho việc ghép file, dựng màn và duyệt lô. Khi đổi kế hoạch builder, chạy `build --plan <tệp>` và mở lại plugin đã import.
 
