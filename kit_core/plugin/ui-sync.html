@@ -1,0 +1,197 @@
+<style>
+  .actions { flex-wrap: wrap; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 8px 14px; margin-bottom: 14px; max-height: 38%; overflow-y: auto; flex-shrink: 0; }
+  .panel h2 { font-size: 12.5px; font-weight: 700; color: var(--danger); margin-bottom: 4px; }
+  .pill-warn { background: #FDECEA; color: var(--danger); }
+  .pill-mute { background: #EEF1F6; color: var(--muted); }
+  .row-d.list { max-height: 120px; overflow-y: auto; }
+  details > summary { cursor: pointer; font-size: 11.5px; color: var(--accent); }
+  .cf-t { font-weight: 600; font-size: 12.5px; color: var(--accent-deep); cursor: pointer; background: none; border: none; padding: 0; text-align: left; border-radius: 0; }
+  .cf-b { display: flex; gap: 6px; margin-top: 6px; }
+  .cf-b button { padding: 5px 10px; font-size: 11.5px; }
+  #applyBar { display: none; gap: 8px; margin-bottom: 10px; }
+  #applyBar.on { display: flex; }
+</style>
+<script>
+  const SYNC_KINDS = [
+    ['conflict', 'Xung đột (giữ bản sửa tay, bản mới nằm cạnh)', 'warn'],
+    ['keepEdit', 'Giữ bản sửa tay (không dựng bản mới)', 'mute'],
+    ['replace', 'Thay bằng bản mới', 'ok'],
+    ['create', 'Dựng mới', 'ok'],
+    ['skip', 'Bỏ qua (không đổi)', 'mute'],
+  ];
+  let applyBar = null;
+  let cfPanel = null;
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function itemText(it) {
+    const themes = it.theme && it.theme !== 'light' ? ' · ' + it.theme : '';
+    return it.text + themes + (it.draft ? ' (+ bản mới cạnh)' : '');
+  }
+
+  function renderSummary(summary, header) {
+    aiContent.innerHTML = '';
+    if (header) aiContent.appendChild(el('div', 'row-t', header));
+    for (const [key, label, kind] of SYNC_KINDS) {
+      const list = (summary.items && summary.items[key]) || [];
+      const row = el('div', 'row');
+      const h = el('div', 'row-h');
+      h.appendChild(el('div', 'row-t', label));
+      h.appendChild(el('span', 'pill pill-' + kind, String(list.length)));
+      row.appendChild(h);
+      if (list.length) {
+        const d = el('details');
+        d.appendChild(el('summary', null, 'Danh sách'));
+        d.appendChild(el('div', 'row-d list', list.map(itemText).join('\n')));
+        d.lastChild.style.whiteSpace = 'pre-line';
+        row.appendChild(d);
+      }
+      aiContent.appendChild(row);
+    }
+  }
+
+  // Có gì để ghi không: dựng mới, thay, xung đột, hoặc giữ bản sửa tay kèm bản mới cạnh (khung vẽ tay chưa có base).
+  function hasWrites(summary) {
+    const it = summary.items;
+    return it.create.length + it.replace.length + it.conflict.length + it.keepEdit.filter((x) => x.draft).length > 0;
+  }
+
+  function setBar(on) {
+    applyBar.classList.toggle('on', on);
+    btnUpdate.disabled = on;
+  }
+
+  async function runPreview() {
+    btnUpdate.disabled = true;
+    btnRollback.disabled = true;
+    setStatus('Đang so sánh Figma với bản mới…');
+    try {
+      const res = await callMain('previewSync', {});
+      renderSummary(res.summary, 'Xem trước — chưa ghi gì vào Figma');
+      const writes = hasWrites(res.summary);
+      applyBar.querySelector('.btn-primary').disabled = !writes;
+      setBar(true);
+      setStatus(writes ? 'Bấm Áp dụng để ghi. Khung bản sửa tay không bao giờ bị xoá.' : 'Không có gì cần ghi.', writes ? '' : 'ok');
+    } catch (err) {
+      btnUpdate.disabled = false;
+      setStatus('Lỗi: ' + err.message, 'err');
+    } finally {
+      btnRollback.disabled = !canRollback;
+    }
+  }
+
+  async function runApply() {
+    setBar(false);
+    btnUpdate.disabled = true;
+    btnRollback.disabled = true;
+    prog.classList.add('on');
+    fill.style.width = '10%';
+    setStatus('Đang cập nhật…');
+    try {
+      const res = await callMain('updateDraft', {});
+      fill.style.width = '100%';
+      const c = res.merge.counts;
+      renderSummary(res.merge, 'Kết quả cập nhật');
+      canRollback = (res.builtCount || 0) + (res.movedCount || 0) > 0;
+      const notes = res.cleanup && Array.isArray(res.cleanup.notes) ? res.cleanup.notes : [];
+      setStatus('Xong: ' + c.create + ' dựng mới · ' + c.replace + ' thay · ' + c.skip + ' bỏ qua · ' + c.keepEdit + ' giữ sửa tay · ' + c.conflict + ' xung đột.' + (notes.length ? ' ' + notes.join(' ') : ''), c.conflict ? 'err' : 'ok');
+      await refreshConflicts();
+    } catch (err) {
+      fill.style.width = '0%';
+      setStatus('Lỗi: ' + err.message, 'err');
+    } finally {
+      btnUpdate.disabled = false;
+      btnRollback.disabled = !canRollback;
+    }
+  }
+
+  function confirmButton(label, onConfirm, cls) {
+    const b = el('button', cls || 'btn-secondary', label);
+    let armed = false;
+    b.onclick = () => {
+      if (!armed) {
+        armed = true;
+        b.textContent = 'Chắc chắn? Bấm lại để xoá bản sửa tay';
+        setTimeout(() => { armed = false; b.textContent = label; }, 4000);
+        return;
+      }
+      onConfirm();
+    };
+    return b;
+  }
+
+  async function resolve(c, choice) {
+    try {
+      const r = await callMain('resolveConflict', { keepId: c.keepId, newId: c.newId, choice, confirm: choice === 'theirs' });
+      canRollback = false;
+      btnRollback.disabled = true;
+      setStatus((choice === 'mine' ? 'Đã giữ bản sửa tay' : 'Đã lấy bản mới') + ' · ' + c.text + '. Còn ' + r.remaining + ' xung đột.', 'ok');
+      await refreshConflicts();
+    } catch (err) {
+      setStatus('Lỗi: ' + err.message, 'err');
+    }
+  }
+
+  function conflictRow(c) {
+    const row = el('div', 'row');
+    const t = el('button', 'cf-t', c.text + (c.theme !== 'light' ? ' · ' + c.theme : ''));
+    t.title = 'Zoom tới cặp khung';
+    t.onclick = () => callMain('focusConflict', { keepId: c.keepId, newId: c.newId }).catch((e) => setStatus('Lỗi: ' + e.message, 'err'));
+    row.appendChild(t);
+    const bar = el('div', 'cf-b');
+    const keep = el('button', 'btn-secondary', 'Giữ bản sửa tay');
+    keep.onclick = () => resolve(c, 'mine');
+    bar.appendChild(keep);
+    bar.appendChild(confirmButton('Lấy bản mới', () => resolve(c, 'theirs'), 'btn-secondary'));
+    row.appendChild(bar);
+    return row;
+  }
+
+  async function refreshConflicts() {
+    const { conflicts } = await callMain('listConflicts', {});
+    cfPanel.innerHTML = '';
+    cfPanel.style.display = conflicts.length ? 'block' : 'none';
+    if (!conflicts.length) return;
+    cfPanel.appendChild(el('h2', null, 'Xung đột cần chọn (' + conflicts.length + ')'));
+    conflicts.forEach((c) => cfPanel.appendChild(conflictRow(c)));
+  }
+
+  async function runExport() {
+    try {
+      const data = await callMain('exportEdits', {});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+      a.download = 'figma-edits-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setStatus('Đã xuất ' + data.count + ' màn sửa tay/xung đột. Lưu file vào project/figma-edits/ trong repo.', 'ok');
+    } catch (err) {
+      setStatus('Lỗi: ' + err.message, 'err');
+    }
+  }
+
+  (function initSync() {
+    const actions = document.querySelector('.actions');
+    applyBar = el('div');
+    applyBar.id = 'applyBar';
+    const ok = el('button', 'btn-primary', 'Áp dụng');
+    const no = el('button', 'btn-secondary', 'Huỷ');
+    ok.onclick = runApply;
+    no.onclick = () => { setBar(false); if (cachedCat) renderPlan(cachedCat); setStatus(''); };
+    applyBar.append(ok, no);
+    cfPanel = el('div', 'panel');
+    cfPanel.style.display = 'none';
+    actions.before(cfPanel);
+    actions.before(applyBar);
+    btnUpdate.onclick = runPreview;
+    document.getElementById('btnExport').onclick = runExport;
+    refreshConflicts().catch(() => {});
+  })();
+</script>

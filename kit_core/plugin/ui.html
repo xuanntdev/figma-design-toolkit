@@ -83,6 +83,8 @@
   <div class="actions">
     <button id="btnUpdate" class="btn-primary">Cập nhật</button>
     <button id="btnRollback" class="btn-secondary" disabled>Hoàn tác</button>
+    <button id="btnExport" class="btn-secondary" title="Xuất JSON các màn đã sửa tay / đang xung đột để lưu vào repo">Xuất thay đổi</button>
+    <button id="btnTokens" class="btn-secondary" title="Chỉ làm mới trang Token &amp; Component (extension có buildTokens)">Token</button>
   </div>
 
   <div id="prog" class="prog">
@@ -198,28 +200,22 @@
       renderRows(rows);
     }
 
-    btnUpdate.onclick = async () => {
+    document.getElementById('btnTokens').onclick = async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
       btnUpdate.disabled = true;
-      btnRollback.disabled = true;
       prog.classList.add('on');
-      fill.style.width = '10%';
-      setStatus('Đang cập nhật…');
+      setStatus('Đang làm mới Token & Component…');
       try {
-        const res = await callMain('updateDraft', {});
-        fill.style.width = '100%';
-        const count = res.builtCount || 0;
-        const groups = Array.isArray(res.groups) ? res.groups : [];
-        if (groups.length) renderSyncResult(groups, 'sync');
-        canRollback = count > 0;
-        const gNote = groups.length ? ' (' + groups.length + ' nhóm)' : '';
-        const protNote = res.keptProtected ? ' · bảo toàn ' + res.keptProtected + ' bản đã chọn' : '';
-        setStatus('Đã cập nhật ' + count + ' khung' + gNote + protNote + '.', 'ok');
+        const r = await callMain('buildTokens', {});
+        const v = r.variables || {};
+        setStatus('Token & Component: ' + (v.colors + v.numbers) + ' biến, ' + ((r.textStyles || {}).total || 0) + ' text style, ' + (r.components || []).length + ' component.', 'ok');
       } catch (err) {
-        fill.style.width = '0%';
         setStatus('Lỗi: ' + err.message, 'err');
       } finally {
+        prog.classList.remove('on');
+        btn.disabled = false;
         btnUpdate.disabled = false;
-        btnRollback.disabled = !canRollback;
       }
     };
 
@@ -270,5 +266,6 @@
       }
     })();
   </script>
+<!--INCLUDE ui-sync.html-->
 </body>
 </html>
