@@ -1,4 +1,4 @@
-"""CLI dựng và kiểm thử plugin Design Sync Toolkit cho Figma (chạy cục bộ 100%, không cầu nối)."""
+"""CLI dựng và kiểm thử plugin Design Sync Toolkit cho Figma (cục bộ 100%; cầu nối localhost chỉ chạy khi bật bridge)."""
 
 import argparse
 import json
@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from kit_core import build, config, manifest
+from kit_core import bridge, bridge_client, build, config, figma_diff, figma_diff_render, manifest
 
 BASE = Path(__file__).resolve().parent
 
@@ -36,6 +36,7 @@ def build_plugin(
 
 
 PROJECT = BASE / "project"
+STATE_DIR = PROJECT / bridge.STATE_DIRNAME
 
 
 def project_readme(cfg: dict) -> str:
@@ -53,6 +54,9 @@ def project_readme(cfg: dict) -> str:
         f"3. Mở plugin **{cfg['name']}** → bấm **Cập nhật**.",
         "4. Sửa xong thì commit thư mục `project/` và push lên repo của team để người khác pull về.",
         "",
+        "Chiều ngược Figma → repo: `python design_sync.py pull` rồi `python design_sync.py figma-diff` (xem `docs/workflow.md` mục 6)."
+        " `init` bật sẵn cầu nối localhost (`bridge` trong `design-sync.json`); bỏ khoá này hoặc đặt `null` để plugin hoàn toàn offline.",
+        "",
     ])
 
 
@@ -63,6 +67,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     if args.id:
         cfg["id"] = args.id
     config.parse_frame(cfg["frame"])
+    cfg["bridge"] = {"port": config.BRIDGE_DEFAULT_PORT}
     ext_dir = PROJECT / "extension"
     ext_dir.mkdir(parents=True, exist_ok=True)
     config.write(PROJECT, cfg)
@@ -121,6 +126,44 @@ def cmd_manifest(args: argparse.Namespace) -> None:
     print(f"Đã lưu {path}")
 
 
+def state_dir(args: argparse.Namespace) -> Path:
+    return args.state_dir or STATE_DIR
+
+
+def bridge_port(args: argparse.Namespace, required: bool) -> int:
+    """Cổng cầu nối: --port, rồi `bridge.port` trong design-sync.json; không có thì pull báo lỗi, serve dùng cổng mặc định."""
+    if args.port:
+        return args.port
+    port = config.bridge_port(config.load(PROJECT))
+    if port or not required:
+        return port or config.BRIDGE_DEFAULT_PORT
+    raise ValueError('Dự án chưa bật cầu nối: thêm "bridge": {"port": 8787} vào project/design-sync.json, build lại plugin; hoặc truyền --port.')
+
+
+def describe(summary: dict, where: Path) -> str:
+    return (f"Đã nhận trạng thái Figma: {summary.get('screens')} màn (sửa tay {summary.get('edited')}, vẽ tay {summary.get('handmade')}), "
+            f"đọc lúc {summary.get('readAt')} -> {where}")
+
+
+def cmd_serve(args: argparse.Namespace) -> None:
+    bridge.serve(state_dir(args), bridge_port(args, required=False), idle_minutes=args.idle_exit)
+
+
+def cmd_pull(args: argparse.Namespace) -> None:
+    summary = bridge_client.pull(bridge_port(args, required=True), Path(__file__).resolve(), state_dir(args), timeout=args.timeout)
+    print(describe(summary, state_dir(args)))
+
+
+def cmd_import_state(args: argparse.Namespace) -> None:
+    print(describe(bridge_client.import_state(args.file, state_dir(args)), state_dir(args)))
+
+
+def cmd_figma_diff(args: argparse.Namespace) -> None:
+    plan = PROJECT / "draft-plan.json"
+    report = figma_diff.build_report(state_dir(args), args.base, not args.no_git, plan)
+    print(json.dumps(report, ensure_ascii=False, indent=1) if args.json else figma_diff_render.render(report))
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(required=True)
@@ -150,6 +193,30 @@ def parser() -> argparse.ArgumentParser:
     captures.add_argument("--version", required=True, help="Phiên bản app lúc chụp.")
     captures.add_argument("--commit", required=True, help="Commit app lúc chụp.")
     captures.set_defaults(handler=cmd_manifest)
+
+    serve_cmd = commands.add_parser("serve", help="Chạy cầu nối cục bộ (127.0.0.1) nhận trạng thái Figma từ plugin vào project/figma-state/.")
+    serve_cmd.add_argument("--port", type=int, default=None, help="Cổng (mặc định bridge.port trong design-sync.json, hoặc 8787).")
+    serve_cmd.add_argument("--state-dir", type=Path, default=None, help="Thư mục ghi trạng thái (mặc định project/figma-state).")
+    serve_cmd.add_argument("--idle-exit", type=float, default=None, help="Tự thoát sau N phút không có plugin hỏi (dùng cho server pull tự bật).")
+    serve_cmd.set_defaults(handler=cmd_serve)
+
+    pull_cmd = commands.add_parser("pull", help="Xin plugin đọc file Figma đang mở rồi chờ trạng thái về project/figma-state/ (tự bật cầu nối nếu chưa chạy).")
+    pull_cmd.add_argument("--port", type=int, default=None, help="Cổng cầu nối (mặc định bridge.port).")
+    pull_cmd.add_argument("--timeout", type=float, default=60, help="Số giây chờ plugin trả lời (mặc định 60).")
+    pull_cmd.add_argument("--state-dir", type=Path, default=None, help="Thư mục ghi trạng thái nếu pull phải tự bật cầu nối.")
+    pull_cmd.set_defaults(handler=cmd_pull)
+
+    import_cmd = commands.add_parser("import-state", help="Nạp tệp JSON do nút Xuất trạng thái của plugin vào project/figma-state/ (không cần mạng).")
+    import_cmd.add_argument("file", type=Path, help="Tệp figma-state-*.json tải về từ plugin.")
+    import_cmd.add_argument("--state-dir", type=Path, default=None, help="Thư mục đích (mặc định project/figma-state).")
+    import_cmd.set_defaults(handler=cmd_import_state)
+
+    diff_cmd = commands.add_parser("figma-diff", help="So project/figma-state/ với bản chốt trước (git HEAD) và với nguồn repo; in báo cáo từng màn.")
+    diff_cmd.add_argument("--json", action="store_true", help="In JSON thay vì chữ.")
+    diff_cmd.add_argument("--base", type=Path, default=None, help="Thư mục figma-state làm mốc (mặc định bản ở git HEAD).")
+    diff_cmd.add_argument("--no-git", action="store_true", help="Không lấy mốc từ git.")
+    diff_cmd.add_argument("--state-dir", type=Path, default=None, help="Thư mục trạng thái cần so (mặc định project/figma-state).")
+    diff_cmd.set_defaults(handler=cmd_figma_diff)
     return root
 
 

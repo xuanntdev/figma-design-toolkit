@@ -101,6 +101,7 @@
     const aiContent = document.getElementById('aiContent');
 
     let seq = 0;
+    let inflight = 0; // số lệnh đang chạy trong code.js (cầu nối không đọc state khi đang có lệnh ghi)
     let canRollback = false;
     let cachedCat = null;
     const waiters = {};
@@ -113,8 +114,12 @@
     function callMain(name, args) {
       seq += 1;
       const id = 'ui-' + seq;
+      inflight += 1;
       return new Promise((resolve, reject) => {
-        waiters[id] = (res) => (res.ok ? resolve(res.value) : reject(new Error(res.error || 'Lỗi không xác định')));
+        waiters[id] = (res) => {
+          inflight -= 1;
+          return res.ok ? resolve(res.value) : reject(new Error(res.error || 'Lỗi không xác định'));
+        };
         parent.postMessage({ pluginMessage: { type: 'PLUGIN_CMD', cmd: { id, name, args: args || {} } } }, '*');
       });
     }
@@ -268,5 +273,7 @@
     })();
   </script>
 <!--INCLUDE ui-sync.html-->
+<!--INCLUDE ui-state.html-->
+<!--INCLUDE ui-bridge.html-->
 </body>
 </html>

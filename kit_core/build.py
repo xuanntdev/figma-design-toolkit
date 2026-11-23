@@ -15,6 +15,7 @@ MAX_FN_LINES = 40
 DEFAULT_UI_TITLE = "Đồng bộ thiết kế"
 FOOTER = "\n})();\n"
 _INCLUDE = re.compile(r"<!--INCLUDE (\S+)-->")
+BRIDGE_UI = "ui-bridge.html"  # chỉ nhúng khi dự án bật bridge; bản không bridge không chứa chữ nào về mạng
 _FN_START = re.compile(r"^(?:async\s+)?function\s+(\w+)")
 
 
@@ -123,7 +124,7 @@ def build(
     plugin_id: str | None = None,
     runtime: dict | None = None,
 ) -> dict:
-    """Sinh code.js, ui.html và manifest.json (cục bộ 100%, allowedDomains=['none'])."""
+    """Sinh code.js, ui.html và manifest.json (cục bộ 100%: allowedDomains=['none'] trừ khi bật bridge)."""
     for ext in extensions:
         if not ext.is_dir():
             raise ValueError(f"Không tìm thấy thư mục extension {ext}.")
@@ -135,18 +136,35 @@ def build(
     text = bundle_text(extensions, version, plan=plan, runtime=runtime)
     (out_dir / "code.js").write_text(text, encoding="utf-8", newline="\n")
     ui_file = ui_path or (PLUGIN_DIR / "ui.html")
-    ui = _INCLUDE.sub(lambda m: (ui_file.parent / m.group(1)).read_text(encoding="utf-8"), ui_file.read_text(encoding="utf-8"))
+    port = (runtime.get("bridge") or {}).get("port")
+    ui = _INCLUDE.sub(lambda m: include_ui(ui_file.parent / m.group(1), port), ui_file.read_text(encoding="utf-8"))
     if name:
         ui = ui.replace(f"<h1>{DEFAULT_UI_TITLE}</h1>", f"<h1>{html.escape(name)}</h1>")
     (out_dir / "ui.html").write_text(ui, encoding="utf-8", newline="\n")
     manifest = json.loads((PLUGIN_DIR / "manifest.json").read_text(encoding="utf-8"))
-    manifest["networkAccess"] = {"allowedDomains": ["none"]}
+    manifest["networkAccess"] = network_access(port)
     if name:
         manifest["name"] = name
     if plugin_id:
         manifest["id"] = plugin_id
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return {"out": str(out_dir), "version": version, "bytes": len(text.encode("utf-8")), "modules": len(module_files(extensions))}
+
+
+def include_ui(path: Path, port: int | None) -> str:
+    if path.name == BRIDGE_UI:
+        return path.read_text(encoding="utf-8").replace("__BRIDGE_PORT__", str(port)) if port else ""
+    return path.read_text(encoding="utf-8")
+
+
+def network_access(port: int | None) -> dict:
+    """Mặc định không mạng; bridge bật thì chỉ cho đúng http://localhost:<port> (Figma yêu cầu `reasoning` khi cho máy cục bộ)."""
+    if not port:
+        return {"allowedDomains": ["none"]}
+    return {
+        "allowedDomains": [f"http://localhost:{port}"],
+        "reasoning": "Gửi trạng thái file Figma về máy dev (design_sync.py serve) để AI đọc; chỉ localhost, tắt bằng cách bỏ khoá bridge.",
+    }
 
 
 def long_functions(text: str) -> list[tuple[str, int]]:

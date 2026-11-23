@@ -22,6 +22,7 @@ FRAME_PRESETS = {
     "tablet": {"width": 834, "height": 1194, "perRow": 4},
     "desktop": {"width": 1440, "height": 1024, "perRow": 3},
 }
+BRIDGE_DEFAULT_PORT = 8787
 LABEL_KEYS = ("currentName", "improvedName", "currentSub", "improvedSub", "pageFeatures", "pageTokens")
 
 
@@ -63,10 +64,25 @@ def validate(cfg: dict, source: Path) -> dict:
     if cfg.get("improved") is False and cfg.get("target", "improved") != "current":
         raise ValueError(f"{source}: improved=false (không có khu Cải tiến) thì target phải là current.")
     settings.validate_options(cfg, source)
+    bridge_port(cfg, source)
     unknown = set(cfg.get("labels") or {}) - set(LABEL_KEYS)
     if unknown:
         raise ValueError(f"{source}: labels không hỗ trợ {sorted(unknown)}. Chỉ nhận {list(LABEL_KEYS)}.")
     return cfg
+
+
+def bridge_port(cfg: dict, source: Path | str = CONFIG_NAME) -> int | None:
+    """Cầu nối localhost: `bridge: {"port": 8787}`. Không khai (hoặc false/null) = tắt, plugin không có quyền mạng. `init` ghi sẵn khoá này."""
+    bridge = cfg.get("bridge")
+    if bridge in (None, False):
+        return None
+    if not isinstance(bridge, dict):
+        raise ValueError(f'{source}: bridge phải là đối tượng như {{"port": {BRIDGE_DEFAULT_PORT}}}.')
+    unknown = set(bridge) - {"port"}
+    port = bridge.get("port", BRIDGE_DEFAULT_PORT)
+    if unknown or isinstance(port, bool) or not isinstance(port, int) or not 1024 <= port <= 65535:
+        raise ValueError(f"{source}: bridge chỉ nhận port là số nguyên 1024–65535.")
+    return port
 
 
 def load(project: Path) -> dict:
@@ -84,7 +100,7 @@ def write(project: Path, cfg: dict) -> Path:
 
 def runtime(cfg: dict) -> dict:
     """Phần cấu hình plugin cần lúc chạy trong Figma (nhúng vào code.js thành DESIGN_CONFIG)."""
-    return {
+    out = {
         "name": cfg.get("name") or DEFAULT_NAME,
         "frame": parse_frame(cfg.get("frame", "mobile")),
         "target": cfg.get("target", "improved"),
@@ -92,3 +108,7 @@ def runtime(cfg: dict) -> dict:
         "labels": cfg.get("labels") or {},
         **settings.runtime_options(cfg),
     }
+    port = bridge_port(cfg)
+    if port:
+        out["bridge"] = {"port": port}
+    return out

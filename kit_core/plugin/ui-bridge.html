@@ -1,0 +1,93 @@
+<script>
+  // Cầu nối localhost (chỉ có khi design-sync.json bật bridge): "Gửi về repo" gửi trạng thái ngay; ngoài ra cửa sổ này hỏi
+  // GET /pending mỗi vài giây và chỉ đọc + gửi khi repo (design_sync.py pull) đang chờ. Máy chủ không chạy thì giãn nhịp hỏi.
+  const BRIDGE_URL = 'http://localhost:__BRIDGE_PORT__';
+  const BRIDGE_POLL_MS = 3000;
+  const BRIDGE_MAX_MS = 10000;
+  let bridgeBusy = false;
+  let bridgeDelay = BRIDGE_POLL_MS;
+  let bridgeHandled = null;
+  let bridgeLast = null;
+  const bridgeLine = el('div', 'st');
+
+  function clock(d) {
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function showBridge(connected) {
+    bridgeLine.textContent = connected
+      ? 'Đã kết nối repo' + (bridgeLast ? ' · lần đọc cuối ' + clock(bridgeLast) : '')
+      : 'Chưa kết nối repo (chạy python design_sync.py serve, cổng __BRIDGE_PORT__)';
+  }
+
+  async function bridgeCall(method, path, body) {
+    const init = { method };
+    if (body) {
+      init.body = JSON.stringify(body);
+      init.headers = { 'Content-Type': 'text/plain;charset=UTF-8' }; // yêu cầu "đơn giản": không cần preflight
+    }
+    const res = await fetch(BRIDGE_URL + path, init);
+    return res.json();
+  }
+
+  // Đọc Figma rồi gửi lên cầu nối kèm requestId (nếu có); lỗi đọc cũng báo lại để `pull` thôi chờ.
+  async function bridgeSend(requestId) {
+    let payload;
+    try {
+      payload = await callMain('readState', { requestId });
+    } catch (err) {
+      return bridgeCall('POST', '/state', { kind: 'figma-state', requestId, error: err.message });
+    }
+    const res = await bridgeCall('POST', '/state', payload);
+    if (res.ok) bridgeLast = new Date();
+    res.text = res.ok ? stateSummary(payload) : '';
+    return res;
+  }
+
+  async function bridgePoll() {
+    if (!bridgeBusy && inflight === 0) {
+      try {
+        const r = await bridgeCall('GET', '/pending');
+        bridgeDelay = BRIDGE_POLL_MS;
+        if (r.pending && r.pending.id !== bridgeHandled) {
+          bridgeBusy = true;
+          bridgeHandled = r.pending.id;
+          await bridgeSend(r.pending.id).catch(() => {});
+          bridgeBusy = false;
+        }
+        showBridge(true);
+      } catch (err) {
+        bridgeBusy = false;
+        bridgeDelay = Math.min(bridgeDelay * 2, BRIDGE_MAX_MS);
+        showBridge(false);
+      }
+    }
+    setTimeout(bridgePoll, bridgeDelay);
+  }
+
+  async function runBridgePush(btn) {
+    btn.disabled = true;
+    setStatus('Đang đọc file Figma và gửi về repo…');
+    try {
+      const res = await bridgeSend(null);
+      if (!res.ok) throw new Error(res.error || 'repo từ chối');
+      setStatus('Đã gửi về repo: ' + res.text + '.', 'ok');
+      showBridge(true);
+    } catch (err) {
+      const down = err instanceof TypeError;
+      setStatus(down ? 'Chưa chạy design_sync.py serve (cổng __BRIDGE_PORT__). Hoặc dùng Xuất trạng thái rồi import-state.' : 'Lỗi: ' + err.message, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  (function initBridge() {
+    const btn = el('button', 'btn-secondary', 'Gửi về repo');
+    btn.title = 'Đọc file Figma và gửi trạng thái về project/figma-state/ (cần design_sync.py serve)';
+    btn.onclick = () => runBridgePush(btn);
+    document.querySelector('.actions').appendChild(btn);
+    document.getElementById('st').after(bridgeLine);
+    showBridge(false);
+    bridgePoll();
+  })();
+</script>

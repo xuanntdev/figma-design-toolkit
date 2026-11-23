@@ -1,9 +1,10 @@
-"""Kiểm thử toàn diện bản phát hành cục bộ (không cầu nối) của Design Sync Toolkit."""
+"""Kiểm thử toàn diện bản phát hành của Design Sync Toolkit (cục bộ; cầu nối localhost chỉ khi dự án bật bridge)."""
 
 import argparse
 import base64
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,7 @@ def verify_kit(kit: Path, work: Path, packaged: bool) -> None:
     verify_scenarios(kit, work)
     verify_options(kit, work)
     verify_gen_plan(kit, work)
+    verify_bridge(kit, work)
     verify_project(kit, work)
 
 
@@ -62,7 +64,8 @@ def verify_built_files(work: Path) -> Path:
 
     ui = (work / "built/ui.html").read_text(encoding="utf-8")
     assert '<html lang="vi">' in ui and "Đồng bộ thiết kế" in ui and "Cập nhật" in ui and "Hoàn tác" in ui
-    assert "bridge" not in ui.lower() and "localhost" not in ui.lower()
+    assert "bridge" not in ui.lower() and "localhost" not in ui.lower() and "fetch(" not in ui, "không khai bridge thì UI không có đường ra mạng"
+    assert "Xuất trạng thái" in ui and "Gửi về repo" not in ui
 
     bundle = work / "built/code.js"
     code_text = bundle.read_text(encoding="utf-8")
@@ -221,6 +224,36 @@ def verify_simulation(kit: Path, work: Path, example_bundle: Path) -> None:
         subprocess.run(["node", str(kit / "verify_project.js"), str(out / "code.js")], check=True)
 
 
+def verify_bridge(kit: Path, work: Path) -> None:
+    # 4h. Chiều Figma -> repo: readState (thuần đọc) trên bundle extension thử có component/token; bridge tuỳ chọn (manifest + UI); cầu nối + pull + import-state + figma-diff
+    from kit_core import build, config
+
+    plan = {"screenIds": ["g1-a", "g1-b"], "themes": ["light"], "replace": True}
+    runtime = config.runtime({"frame": {"width": 100, "height": 100, "perRow": 3}, "target": "current", "improved": False})
+    assert "bridge" not in runtime and config.runtime({"bridge": {"port": 9123}})["bridge"] == {"port": 9123}
+    assert "bridge" not in config.runtime({"bridge": None}) and "bridge" not in config.runtime({"bridge": False})
+    for bad in ({"bridge": 1}, {"bridge": {"port": 80}}, {"bridge": {"port": "8787"}}, {"bridge": {"host": "0.0.0.0"}}):
+        try:
+            config.validate(bad, Path("design-sync.json"))
+        except ValueError:
+            continue
+        raise AssertionError(f"Cấu hình bridge sai phải bị từ chối: {bad}")
+    build.build([kit / "tests" / "link-extension"], work / "state-off", runtime=runtime, plan=plan)
+    build.build([kit / "tests" / "link-extension"], work / "state-on", runtime={**runtime, "bridge": {"port": 9123}}, plan=plan)
+    off = json.loads((work / "state-off/manifest.json").read_text(encoding="utf-8"))
+    on = json.loads((work / "state-on/manifest.json").read_text(encoding="utf-8"))
+    assert off["networkAccess"] == {"allowedDomains": ["none"]}
+    assert on["networkAccess"]["allowedDomains"] == ["http://localhost:9123"] and on["networkAccess"]["reasoning"], on["networkAccess"]
+    ui_off = (work / "state-off/ui.html").read_text(encoding="utf-8")
+    ui_on = (work / "state-on/ui.html").read_text(encoding="utf-8")
+    assert "Gửi về repo" in ui_on and "http://localhost:9123" in ui_on and "__BRIDGE_PORT__" not in ui_on and "/pending" in ui_on
+    assert "Gửi về repo" not in ui_off and "localhost" not in ui_off and "fetch(" not in ui_off
+    state_out = work / "state-out"
+    subprocess.run(["node", str(kit / "verify_state.js"), str(work / "state-off/code.js")], check=True, env={**os.environ, "STATE_OUT_DIR": str(state_out)})
+    subprocess.run(["node", str(kit / "verify_state.js"), str(work / "state-on/code.js")], check=True)
+    subprocess.run([sys.executable, "-B", str(kit / "verify_bridge.py"), str(state_out)], check=True)
+
+
 def verify_project(kit: Path, work: Path) -> None:
     # 5. Dự án team tại <kit>/project/ (chạy trên bản sao kit để không ghi vào kit thật)
     team_kit = work / "team-kit"
@@ -233,7 +266,7 @@ def verify_project(kit: Path, work: Path) -> None:
     project = team_kit / "project"
     assert (project / "extension/01-screens.js").is_file() and (project / "draft-plan.json").is_file()
     cfg = json.loads((project / "design-sync.json").read_text(encoding="utf-8"))
-    assert cfg == {"name": "Team Web", "id": "team-web", "frame": "1280x800", "target": "current", "labels": {}}, cfg
+    assert cfg == {"name": "Team Web", "id": "team-web", "frame": "1280x800", "target": "current", "labels": {}, "bridge": {"port": 8787}}, cfg
     again = subprocess.run([*cli, "init", "--name", "Khác"], cwd=team_kit, capture_output=True, text=True)
     assert again.returncode == 1 and "Đã có dự án" in again.stderr, again.stderr
 
@@ -242,6 +275,26 @@ def verify_project(kit: Path, work: Path) -> None:
     assert_project_build(project / "dist", "Team Web", "team-web", 1280, "current")
     subprocess.run([*cli, "check"], cwd=team_kit, check=True)
     subprocess.run(["node", str(team_kit / "verify_plugin.js"), str(project / "dist/code.js")], cwd=work, check=True)
+    # 6b. init bật sẵn bridge: manifest chỉ cho đúng http://localhost:8787, UI có nút gửi về repo
+    assert json.loads((project / "dist/manifest.json").read_text(encoding="utf-8"))["networkAccess"]["allowedDomains"] == ["http://localhost:8787"]
+    assert "Gửi về repo" in (project / "dist/ui.html").read_text(encoding="utf-8")
+    # 6c. Bỏ khoá bridge (hoặc đặt null) = tắt: manifest ["none"], UI không có mã mạng, pull từ chối và không mở cổng nào
+    for explicit_null in (False, True):
+        no_bridge = {k: v for k, v in cfg.items() if k != "bridge"}
+        if explicit_null:
+            no_bridge["bridge"] = None
+        (project / "design-sync.json").write_text(json.dumps(no_bridge), encoding="utf-8")
+        subprocess.run([*cli, "build"], cwd=work, check=True)
+        assert json.loads((project / "dist/manifest.json").read_text(encoding="utf-8"))["networkAccess"] == {"allowedDomains": ["none"]}
+        ui_off = (project / "dist/ui.html").read_text(encoding="utf-8")
+        assert "Gửi về repo" not in ui_off and "localhost" not in ui_off and "fetch(" not in ui_off
+        refused = subprocess.run([*cli, "pull", "--timeout", "1"], cwd=team_kit, capture_output=True, text=True)
+        assert refused.returncode == 1 and "chưa bật cầu nối" in refused.stderr, refused.stderr
+    # 6d. Đổi cổng thì build theo cổng mới
+    (project / "design-sync.json").write_text(json.dumps({**cfg, "bridge": {"port": 9456}}), encoding="utf-8")
+    subprocess.run([*cli, "build"], cwd=work, check=True)
+    assert json.loads((project / "dist/manifest.json").read_text(encoding="utf-8"))["networkAccess"]["allowedDomains"] == ["http://localhost:9456"]
+    assert "http://localhost:9456" in (project / "dist/ui.html").read_text(encoding="utf-8")
     ignored = (team_kit / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "/project/" not in ignored and "/project/dist/" in ignored, "project/ phải commit được, project/dist/ thì không"
 
