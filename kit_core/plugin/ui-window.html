@@ -1,0 +1,51 @@
+<script id="windowControls">
+  const windowToggle = document.getElementById('toggleWindow');
+  const windowGrip = document.getElementById('resizeWindow');
+  let expandedSize;
+  let windowDrag;
+
+  function resizePluginWindow(width, height, compact = false) {
+    parent.postMessage({ pluginMessage: { type: 'RESIZE_WINDOW', width, height, compact } }, '*');
+  }
+
+  windowToggle.addEventListener('click', () => {
+    const compact = document.body.toggleAttribute('data-compact');
+    windowToggle.textContent = compact ? 'Mở rộng' : 'Thu gọn';
+    windowToggle.setAttribute('aria-expanded', String(!compact));
+    if (compact) {
+      expandedSize = [window.innerWidth, window.innerHeight];
+      resizePluginWindow(308, 124, true);
+    } else {
+      resizePluginWindow(...expandedSize);
+    }
+  });
+
+  windowGrip.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 || windowDrag) return;
+    windowDrag = {
+      pointerId: event.pointerId, x: event.screenX, y: event.screenY,
+      width: window.innerWidth, height: window.innerHeight,
+    };
+    windowGrip.setPointerCapture(event.pointerId);
+  });
+
+  windowGrip.addEventListener('pointermove', (event) => {
+    if (windowDrag?.pointerId !== event.pointerId) return;
+    resizePluginWindow(
+      Math.round(windowDrag.width + event.screenX - windowDrag.x),
+      Math.round(windowDrag.height + event.screenY - windowDrag.y),
+    );
+  });
+
+  windowGrip.addEventListener('lostpointercapture', (event) => {
+    if (windowDrag?.pointerId === event.pointerId) windowDrag = null;
+  });
+
+  const windowResizeKeys = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
+  windowGrip.addEventListener('keydown', (event) => {
+    if (!Object.hasOwn(windowResizeKeys, event.key)) return;
+    event.preventDefault();
+    const [dx, dy] = windowResizeKeys[event.key];
+    resizePluginWindow(window.innerWidth + dx, window.innerHeight + dy);
+  });
+</script>

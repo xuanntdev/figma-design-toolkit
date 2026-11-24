@@ -10,7 +10,7 @@ python design_sync.py build
 python design_sync.py doctor
 ```
 
-Trong Figma Desktop, chọn **Plugins → Development → Import plugin from manifest…** và mở `project/dist/manifest.json`. Mở plugin trong file đích rồi bấm **Kết nối file**. Mỗi phiên ghép một file, giữ plugin mở trong lúc chat. Qua file khác, dùng **Ngắt kết nối** rồi kết nối ở file mới. Nếu đóng plugin, phiên cũ tự hết hạn. `doctor` báo manifest và bước còn thiếu. Khóa cầu nối `localhost` được tạo khi build.
+Trong Figma Desktop, chọn **Plugins → Development → Import plugin from manifest…** và mở `project/dist/manifest.json`. Plugin tự kết nối khi mở trong file đích và cầu nối đang chạy. `doctor` khởi động cầu nối khi cần và báo phiên đang ghép. Giữ plugin mở trong lúc chat. Muốn chuyển file, dùng **Ngắt kết nối** ở cửa sổ trước rồi mở plugin trong file mới. Khóa cầu nối `localhost` được tạo khi build.
 
 Cùng popup dùng cho thao tác theo selection, lô chờ **Cập nhật** và bộ dựng dự án nếu có. Khi đổi danh sách bộ dựng, dùng `build --plan <tệp>` với đường dẫn manifest đã import.
 

@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
 const { MockNode, boot, all } = require('./link-env');
 
 function add(parent, type, name, attrs = {}) {
@@ -219,7 +222,47 @@ async function rebuildKeepsPrototype(env) {
   assert.equal(button.reactions[0].actions[0].destinationId, second.proposals[0].frameId);
 }
 
+async function verifyAutoConnect() {
+  const html = fs.readFileSync(path.join(__dirname, '../kit_core/plugin/ui-live.html'), 'utf8');
+  const createElement = () => ({ append() {}, after() {}, setAttribute() {} });
+  let poll;
+  let now = 1;
+  let reserved = true;
+  const requests = [];
+  const context = vm.createContext({
+    document: { createElement, getElementById: createElement },
+    window: { addEventListener() {} },
+    Date: { now: () => now },
+    readOnly: true,
+    inflight: 0,
+    setInterval: (handler) => { poll = handler; },
+    callMain: async () => ({ file: 'RiseSeed' }),
+    fetch: async (url) => {
+      const route = url.split('/').at(-1);
+      requests.push(route);
+      if (route === 'attach' && reserved) {
+        return { ok: false, json: async () => ({ code: 'session_in_use' }) };
+      }
+      return { ok: true, json: async () => ({ id: 'same-session', file: 'RiseSeed' }) };
+    },
+  });
+  vm.runInContext(html.replace(/<\/?script>/g, ''), context);
+  await poll();
+  assert.match(vm.runInContext('liveStatus.textContent', context), /Đang chờ phiên/);
+  assert.equal(vm.runInContext('liveSession', context), null);
+  reserved = false;
+  now += 2501;
+  await poll();
+  assert.equal(vm.runInContext('liveSession.id', context), 'same-session');
+  await vm.runInContext('liveConnect.onclick()', context);
+  now += 2501;
+  await poll();
+  assert.equal(vm.runInContext('liveSession', context), null);
+  assert.deepEqual(requests, ['attach', 'attach', 'detach']);
+}
+
 async function main() {
+  await verifyAutoConnect();
   const env = fixture(process.argv[2]);
   if (process.argv.includes('--empty')) {
     const catalog = await env.call('getCatalog');

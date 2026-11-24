@@ -113,6 +113,22 @@ Theo [nguyen-tac.md](nguyen-tac.md) mục 1, màn dựng ra là **instance của
 - **Ví dụ chạy được**: [`capture/link-example/`](../capture/link-example) (Button, Tag, App/Header + luật theo tên `thẻ.class`, token mẫu) trên `capture/sample-site`; cách dùng ở [capture.md](capture.md). `tests/link-extension/` là bản luật giả thuần dữ liệu dùng để kiểm lõi.
 
 
+### Bề mặt trong Sáng và Tối
+
+Đặt tên biến theo vai trò trong design system của dự án. Ví dụ một bộ thẻ có thể dùng một component `Card` với các biến thể sau.
+
+| Vai trò | Variant | Token nền và viền mẫu |
+| --- | --- | --- |
+| Nội dung thường | `Tone=Neutral` | `color/bg/surface`, `color/border/default` |
+| Thông tin cần nhấn nhẹ | `Tone=Subtle` | `color/bg/accent-subtle`, `color/border/accent-subtle` |
+| Khối cần nhấn rõ | `Tone=Strong` | `color/bg/accent-strong`, `color/border/accent-strong` |
+
+1. Khai giá trị hoặc alias cho từng biến ở mode Sáng và Tối trong thư viện. Nền màn dùng token riêng như `color/bg/page`. Hai vai trò có thể cùng giá trị ở Sáng và khác ở Tối.
+2. Gắn biến vào nền, viền và chữ của component gốc. Dùng `linkRules` chọn variant theo vai trò của khối nguồn. `linkTokens()` của khối thô chỉ tra một tên biến cho mỗi cặp thuộc tính và mã màu. Khi hai vai trò cùng mã màu, dùng component đã gắn biến hoặc gắn theo ID biến để giữ đúng vai trò khi đổi mode.
+3. Với builder, dùng `buildTokens` để tạo biến và component còn thiếu. Đặt mode ở frame màn bằng `setExplicitVariableModeForCollection` trong extension. `DRAFT_PLAN.themes` quyết định lượt dựng nào chạy. Extension chịu trách nhiệm áp dụng mode của collection lên frame.
+4. Khi dựng trực tiếp, `create` có thể dùng `cloneFrom` từ một frame mẫu đã cấu hình mode, hoặc tạo `INSTANCE` từ variant đã có và dùng mode của vùng đặt màn. Đặt mode trên Frame hoặc Section trong Figma khi cần đổi mode của đích. CLI chung nhận binding bằng `variableId` và sửa giá trị của biến đã có.
+5. Đọc `tree` để kiểm variant, fill, stroke và binding, rồi xuất ảnh của cùng một trạng thái ở cả hai mode. Đo tương phản chữ chính và chữ phụ trên màu nền đã resolve. Khi điều chỉnh biến hoặc component dùng chung, kiểm thêm một màn đang dùng cùng vai trò và dùng `impact` trước khi áp dụng theo lô.
+
 ## 6. Chiều ngược: Figma → repo (AI đọc được Figma đang có gì)
 
 Plugin đọc file Figma đã ghép rồi đưa kết quả vào `project/figma-state/`. Đây là bản đọc để AI hiểu canvas và design system. `pull` chỉ đọc và không tạo bước Undo. Dựng hoặc chỉnh trong file qua [luồng trực tiếp](figma-live.md).

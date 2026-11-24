@@ -24,7 +24,7 @@ python design_sync.py doctor
 ```
 *(Trên macOS/Linux, dùng `python3` nếu cần.)*
 
-**3. Import vào Figma Desktop** (mỗi máy một lần) qua **Plugins → Development → Import plugin from manifest…** → `project/dist/manifest.json`. Mở plugin ở đúng file và bấm **Kết nối file**.
+**3. Import vào Figma Desktop** (mỗi máy một lần) qua **Plugins → Development → Import plugin from manifest…** → `project/dist/manifest.json`. Mở plugin ở đúng file để tự kết nối khi cầu nối đang chạy.
 
 Mỗi dự án dùng cùng plugin cho kết nối, thao tác trực tiếp, duyệt lô và chạy bộ dựng. Giữ nguyên ID và đường dẫn manifest khi đổi phạm vi. Chạy `python design_sync.py build --plan <kế-hoạch.json>` để nạp kế hoạch mới vào cùng bundle, rồi mở lại plugin đã import. Các thao tác trực tiếp theo selection dùng [CLI Figma](figma-live.md).
 
@@ -56,7 +56,7 @@ Mọi khoá ngoài tên/cỡ khung đều **tuỳ chọn, mặc định giữ h�
 | `frame` | `mobile` | Cỡ khung màn: `desktop` (1440×1024), `tablet` (834×1194), `mobile` (393×873), `"1280x800"` hoặc `{ "width", "height", "perRow" }`. Lưới và mã dựng màn (`ST_GRID.cellW/cellH`) theo cỡ này. |
 | `target` | `improved` | Bấm **Cập nhật** dựng vào đâu: `improved` = khu **Cải tiến** (bản đề xuất, sinh màn mới), `current` = khu **Hiện tại** (vẽ lại màn đang chạy để designer sửa trực tiếp). |
 | `improved` | `true` | `false` = dự án chỉ có khu **Hiện tại**: plugin không tạo, không đòi, không đọc/ghi khu Cải tiến. Bắt buộc `target: "current"`. |
-| `bridge` | bật sẵn khi `init` (`{ "port": 8787 }`); không có khoá = tắt | Cầu nối localhost để CLI đọc và ghi qua cùng popup sau khi người dùng bấm **Kết nối file**. Port từ 1024 đến 65535. Đặt `"bridge": null` hoặc bỏ khoá để dùng plugin hoàn toàn offline. |
+| `bridge` | bật sẵn khi `init` (`{ "port": 8787 }`); không có khoá = tắt | Cầu nối localhost để CLI đọc và ghi qua popup đã kết nối. Port từ 1024 đến 65535. Đặt `"bridge": null` hoặc bỏ khoá để dùng plugin hoàn toàn offline. |
 | `readOnly` | `false` | Bật chế độ kiểm kê chỉ đọc trong cùng template popup. Cần có `bridge`. Chế độ này chỉ nhận lệnh đọc trạng thái và hiện kết nối cục bộ. |
 | `labels` | | Đổi tên khung/trang: `currentName`, `improvedName`, `currentSub`, `improvedSub`, `pageFeatures`, `pageTokens`. |
 

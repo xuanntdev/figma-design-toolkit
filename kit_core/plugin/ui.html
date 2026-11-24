@@ -28,8 +28,32 @@
     padding: 16px;
     font-size: 13px;
     line-height: 1.5;
+    overflow-y: auto;
   }
-  h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; margin-bottom: 12px; flex-shrink: 0; }
+  .window-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-shrink: 0; }
+  h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .window-header button { flex-shrink: 0; padding: 4px 9px; font-size: 11.5px; }
+  .window-resize {
+    position: fixed;
+    right: 2px;
+    bottom: 2px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border-radius: 3px;
+    color: var(--muted);
+    background: var(--canvas);
+    cursor: nwse-resize;
+    touch-action: none;
+  }
+  .window-resize::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    background: linear-gradient(135deg, transparent 45%, currentColor 45% 54%, transparent 54% 71%, currentColor 71% 80%, transparent 80%);
+  }
+  .design-details { display: flex; flex-direction: column; flex: 1; min-height: 96px; overflow-y: auto; }
+  body[data-compact] :is(.design-details, .window-resize) { display: none; }
   .content {
     background: var(--surface);
     border: 1px solid var(--line);
@@ -37,7 +61,7 @@
     padding: 10px 14px;
     margin-bottom: 14px;
     flex: 1;
-    min-height: 0;
+    min-height: 48px;
     overflow-y: auto;
     box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
   }
@@ -68,33 +92,40 @@
   .prog.on { display: block; }
   .track { height: 5px; background: #E2E8F0; border-radius: 999px; overflow: hidden; margin-bottom: 8px; }
   .fill { height: 100%; width: 0%; background: var(--accent); border-radius: 999px; transition: width 0.2s; }
-  .st { margin-top: 8px; font-size: 12px; color: var(--muted); word-break: break-word; }
+  .st { margin-top: 8px; font-size: 12px; color: var(--muted); word-break: break-word; flex-shrink: 0; }
   .st.ok { color: var(--success); font-weight: 600; }
   .st.err { color: var(--danger); font-weight: 600; }
-  body[data-mode="read"] h1 { margin-bottom: 4px; }
+  body[data-mode="read"] .window-header, body[data-compact] .window-header { margin-bottom: 4px; }
 </style>
 </head>
 <body data-mode="__UI_MODE__">
-  <h1>Đồng bộ thiết kế</h1>
+  <header class="window-header">
+    <h1>Đồng bộ thiết kế</h1>
+    <button type="button" id="toggleWindow" class="btn-secondary" aria-expanded="true">Thu gọn</button>
+  </header>
 
   <template id="designControls">
-  <div id="aiContent" class="content">
-    <div class="row"><div class="row-t">Đang tải…</div></div>
-  </div>
+    <div class="design-details">
+      <div id="aiContent" class="content">
+        <div class="row"><div class="row-t">Đang tải…</div></div>
+      </div>
 
-  <div class="actions">
-    <button id="btnUpdate" class="btn-primary" hidden>Cập nhật</button>
-    <button id="btnRollback" class="btn-secondary" hidden disabled>Hoàn tác</button>
-    <button id="btnExport" class="btn-secondary" style="display:none" title="Xuất JSON các màn đã sửa tay / đang xung đột để lưu vào repo">Xuất thay đổi</button>
-    <button id="btnTokens" class="btn-secondary" style="display:none" title="Chỉ làm mới trang Token &amp; Component (extension có buildTokens)">Token</button>
-  </div>
+      <div class="actions">
+        <button id="btnUpdate" class="btn-primary" hidden>Cập nhật</button>
+        <button id="btnRollback" class="btn-secondary" hidden disabled>Hoàn tác</button>
+        <button id="btnExport" class="btn-secondary" style="display:none" title="Xuất JSON các màn đã sửa tay / đang xung đột để lưu vào repo">Xuất thay đổi</button>
+        <button id="btnTokens" class="btn-secondary" style="display:none" title="Chỉ làm mới trang Token &amp; Component (extension có buildTokens)">Token</button>
+      </div>
 
-  <div id="prog" class="prog">
-    <div class="track"><div id="fill" class="fill"></div></div>
-  </div>
+      <div id="prog" class="prog">
+        <div class="track"><div id="fill" class="fill"></div></div>
+      </div>
+    </div>
   </template>
   <div id="st" class="st" aria-live="polite"></div>
+  <button type="button" id="resizeWindow" class="window-resize" aria-label="Đổi kích thước cửa sổ" title="Kéo hoặc dùng phím mũi tên để đổi kích thước"></button>
 
+<!--INCLUDE ui-window.html-->
   <script>
     const readOnly = document.body.dataset.mode === 'read';
     const designControls = document.getElementById('designControls');

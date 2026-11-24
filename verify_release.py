@@ -250,6 +250,7 @@ def verify_bridge(kit: Path, work: Path) -> None:
     assert "Gửi về repo" not in ui_off and "localhost" not in ui_off and "fetch(" not in ui_off
     ui_audit = (work / "state-audit/ui.html").read_text(encoding="utf-8")
     assert 'data-mode="read"' in ui_audit and "/pending" in ui_audit and "function runApply()" not in ui_audit
+    subprocess.run(["node", str(kit / "tests/verify_window.js"), str(work / "state-off"), str(work / "state-audit")], check=True)
     state_out = work / "state-out"
     subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-off/code.js")], check=True, env={**os.environ, "STATE_OUT_DIR": str(state_out)})
     subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-on/code.js")], check=True)
