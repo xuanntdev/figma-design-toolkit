@@ -15,7 +15,8 @@ description: Set up this Figma Design Toolkit, read the connected Figma selectio
 ## Đọc thiết kế
 
 - Chạy `doctor` để lấy đường dẫn manifest và trạng thái ghép file. Khi cần thao tác Figma Desktop, hướng dẫn người dùng mở đúng file, chạy plugin và bấm **Kết nối file**. Kiểm lại tên file và phiên bằng CLI.
-- Khi BA nói “màn này” hoặc “nút này”, đọc `selection` mới rồi dùng `tree <node-id> --session <id>` nếu cần. Nếu không có selection hoặc có nhiều đích không thể suy ra, hỏi đích cụ thể. Khi cần hiểu file, chạy `pull` và đọc index, screens, components và tokens trong `figma-state/` của dự án. Đối chiếu phiên kết nối với `documentSession` trước khi dùng ID từ bản xuất để ghi.
+- Xác định ý định và đích từ câu chat. Ưu tiên đích được nêu rõ. Khi câu chat chỉ đối tượng bằng “màn này”, “nút đang chọn” hoặc cách nói tương tự, gọi `selection` để đọc selection mới rồi dùng `tree <node-id> --session <id>` nếu cần. Bỏ qua selection khi câu chat hỏi việc khác hoặc đã chỉ rõ đích khác. Nếu selection trống hoặc có nhiều đích phù hợp mà yêu cầu chưa xác định được phạm vi, hỏi lại để làm rõ đích.
+- Với câu hỏi như “nút này dùng token màu gì?”, chỉ đọc và trả lời. Việc chọn layer chỉ cung cấp ngữ cảnh, mọi thao tác ghi phải xuất phát từ yêu cầu tạo hoặc sửa của người dùng. Khi cần hiểu cả file, chạy `pull` và đọc index, screens, components và tokens trong `figma-state/` của dự án. Đối chiếu phiên kết nối với `documentSession` trước khi dùng ID từ bản xuất để ghi.
 - Khi cần đọc giao diện Figma bằng ảnh, dùng `export-png <node-id> --session <id> --out <ảnh-tạm>`. Đọc thêm cây layer khi cần style, binding và kích thước.
 
 ## Dựng và sửa
