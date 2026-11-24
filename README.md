@@ -28,7 +28,7 @@ python design_sync.py build
 python design_sync.py doctor
 ```
 
-Trong Figma Desktop, chọn **Plugins → Development → Import plugin from manifest…** và mở `project/dist/manifest.json`. Mở plugin ở đúng file thiết kế rồi bấm **Kết nối file**. Trợ lý AI tìm luồng qua [AGENTS.md](AGENTS.md).
+Trong Figma Desktop, chọn **Plugins → Development → Import plugin from manifest…** và mở `project/dist/manifest.json`. Mở plugin ở đúng file thiết kế để plugin tự kết nối với cầu nối. Trợ lý AI tìm luồng qua [AGENTS.md](AGENTS.md).
 
 Đưa lên repo của team, bảng cấu hình và bảng lệnh: xem [docs/setup.md](docs/setup.md).
 

@@ -8,8 +8,17 @@ from threading import RLock
 
 
 KEY_FILE = ".bridge-key"
-LEASE = 25
+# Chromium can reduce background popup timers to one tick per minute.
+LEASE = 90
 COMMANDS = {"state", "selection", "tree", "impact", "exportPng", "edit", "create", "protect", "stage"}
+
+
+class SessionChanged(ValueError):
+    pass
+
+
+class SessionInUse(ValueError):
+    pass
 
 
 def key_for(project):
@@ -42,7 +51,7 @@ class LiveSession:
 
     def attach(self, body):
         if self.status()["session"]:
-            raise ValueError("Đã ghép một file. Ngắt kết nối trong plugin đang mở trước.")
+            raise SessionInUse("Đã ghép một file. Ngắt kết nối trong plugin đang mở trước.")
         if not isinstance(body.get("file"), str) or not body["file"]:
             raise ValueError("Thiếu tên file Figma.")
         self.session = {"id": secrets.token_hex(16), "file": body["file"][:500]}
@@ -51,10 +60,13 @@ class LiveSession:
         self.batch = None
         return self.session
 
-    def require_session(self, body):
-        session = self.status()["session"]
+    def require_session(self, body, *, from_plugin=False):
+        # A suspended popup can resume its original session unless another popup took over.
+        session = self.session if from_plugin else self.status()["session"]
         if not session or body.get("session") != session["id"]:
-            raise ValueError("Phiên Figma đã đổi hoặc hết hạn. Mở plugin và kết nối lại.")
+            raise SessionChanged("Phiên Figma đã đổi hoặc hết hạn. Mở plugin và kết nối lại.")
+        if from_plugin:
+            self.seen = time.monotonic()
 
     def request(self, body):
         command, args = body.get("command"), body.get("args", {})
@@ -67,7 +79,6 @@ class LiveSession:
         return {"id": rid}
 
     def poll(self):
-        self.seen = time.monotonic()
         job = next((j for j in self.jobs.values() if j["state"] == "pending"), None)
         if job:
             job["state"] = "running"
@@ -108,8 +119,13 @@ class LiveSession:
         body = handler._body() if method == "post" else {}
         if not isinstance(body, dict):
             raise ValueError("Yêu cầu cần là một đối tượng JSON.")
-        with self.lock:
-            result = self.dispatch(method, tail, body)
+        try:
+            with self.lock:
+                result = self.dispatch(method, tail, body)
+        except SessionChanged as exc:
+            return handler._send(400, {"error": str(exc), "code": "session_changed"})
+        except SessionInUse as exc:
+            return handler._send(400, {"error": str(exc), "code": "session_in_use"})
         handler._send(200, result)
 
     def dispatch(self, method, tail, body):
@@ -123,7 +139,8 @@ class LiveSession:
             raise ValueError("Đường dẫn cầu nối không hợp lệ.")
         if tail == ["attach"]:
             return self.attach(body)
-        self.require_session(body)
+        from_plugin = bool(tail) and tail[0] in {"poll", "touch", "detach", "result", "batch"}
+        self.require_session(body, from_plugin=from_plugin)
         if tail == ["detach"]:
             self.session = None
             self.batch = None
@@ -131,7 +148,6 @@ class LiveSession:
         if tail == ["poll"]:
             return self.poll()
         if tail == ["touch"]:
-            self.seen = time.monotonic()
             return {"ok": True}
         if tail == ["request"]:
             return self.request(body)

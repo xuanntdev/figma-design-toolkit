@@ -9,7 +9,7 @@ from pathlib import Path
 from threading import Thread
 
 from kit_core import bridge
-from kit_core.live_bridge import key_for
+from kit_core.live_bridge import LEASE, key_for
 from .verify_bridge import GOOD, http_call
 
 PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aLU8AAAAASUVORK5CYII="
@@ -50,11 +50,12 @@ def verify_live_cli(kit, project=None):
         session = send("POST", "attach", {"file": "Figma thử"})["id"]
         data = {"session": session}
         assert json.loads(subprocess.check_output(doctor, cwd=kit))["ready"]
-        send("POST", "attach", {"file": "File thứ hai"}, 400)
+        assert send("POST", "attach", {"file": "File thứ hai"}, 400)["code"] == "session_in_use"
         send("POST", "request", {"session": "wrong", "command": "edit"}, 400)
         verify_reads(cli, project, port, send, data)
         verify_png(cli, project, send, data)
         verify_batch(send, data)
+        verify_paused_popup(server, send, data)
         send("POST", "detach", data)
         new = send("POST", "attach", {"file": "Figma khác"})["id"]
         assert new != session
@@ -65,6 +66,25 @@ def verify_live_cli(kit, project=None):
         server.server_close()
         runner.join(timeout=2)
     print("verify_live.py: khóa checkout, ghép file, CLI selection/pull và hàng đợi Cập nhật đạt")
+
+
+def verify_paused_popup(server, send, data):
+    request = {**data, "command": "state"}
+    rid = send("POST", "request", request)["id"]
+    assert send("POST", "poll", data)["job"]["id"] == rid
+    with server.live.lock:
+        server.live.seen -= LEASE + 1
+    assert send("GET", "status")["session"] is None
+    assert send("POST", "request", request, 400)["code"] == "session_changed"
+    send("POST", "result/" + rid, {**data, "result": GOOD})
+    assert send("GET", "result/" + rid)["state"] == "done"
+    assert send("GET", "status")["session"]["id"] == data["session"]
+
+    with server.live.lock:
+        server.live.seen -= LEASE + 1
+    resumed = send("POST", "poll", data)
+    assert resumed["batch"]["state"] == "done"
+    assert send("GET", "status")["session"]["id"] == data["session"]
 
 
 def verify_reads(cli, project, port, send, data):

@@ -82,6 +82,18 @@ def summarize(index: dict) -> dict:
     return {"readAt": index.get("readAt"), "receivedAt": index.get("receivedAt"), **{k: counts.get(k) for k in ("screens", "edited", "handmade")}}
 
 
+def rename_state(source: Path, destination: Path) -> None:
+    """Retry a transient Windows file lock without exposing an incomplete snapshot."""
+    for attempt in range(6):
+        try:
+            source.rename(destination)
+            return
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in (5, 32, 33) or attempt == 5:
+                raise
+            time.sleep(0.15 * (attempt + 1))
+
+
 def write_state(state_dir: Path, payload: dict, via: str = "bridge") -> dict:
     """Ghi trọn bộ trạng thái vào state_dir, thay bản trước (dựng ở thư mục tạm cùng cha rồi đổi tên)."""
     validate_payload(payload)
@@ -97,12 +109,12 @@ def write_state(state_dir: Path, payload: dict, via: str = "bridge") -> dict:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(dump_file(rel, content), encoding="utf-8")
         if state_dir.exists():
-            state_dir.rename(old)
+            rename_state(state_dir, old)
         try:
-            tmp.rename(state_dir)
+            rename_state(tmp, state_dir)
         except OSError:
             if old.exists() and not state_dir.exists():
-                old.rename(state_dir)
+                rename_state(old, state_dir)
             raise
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -46,6 +46,8 @@ class Client:
             info = self.call("GET", "result/" + rid)
             if info.get("state") == "done":
                 return {"session": session["id"], "file": session["file"], "result": info["result"]}
+            if info.get("state") == "error":
+                raise ValueError(info.get("error") or "Plugin Figma báo lỗi khi xử lý lệnh.")
             if info.get("state") in {"cancelled", "unknown"}:
                 raise ValueError("Phiên Figma hoặc yêu cầu đã hết hạn.")
             time.sleep(0.2)

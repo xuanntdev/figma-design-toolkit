@@ -1,6 +1,7 @@
 <script>
   const LIVE_URL = 'http://localhost:__BRIDGE_PORT__/live/';
   const LIVE_KEY = '__BRIDGE_KEY__';
+  const LIVE_RECONNECT_DELAY = 2500;
   const liveCommands = Object.freeze({
     state: 'readState', selection: 'liveSelection', tree: 'liveTree', exportPng: 'exportPng',
     impact: 'liveImpact', edit: 'liveEdit', create: 'liveCreate',
@@ -8,6 +9,9 @@
   });
   let liveSession = null;
   let liveBusy = false;
+  let liveTouching = false;
+  let liveWantConnection = true;
+  let liveNextAttach = 0;
   let liveBatch = null;
   const liveLine = document.createElement('div');
   const liveStatus = document.createElement('span');
@@ -26,7 +30,11 @@
     if (data) init.body = JSON.stringify(data);
     const response = await fetch(LIVE_URL + path, init);
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || 'Cầu nối không trả lời.');
+    if (!response.ok) {
+      const error = new Error(payload.error || 'Cầu nối không trả lời.');
+      error.code = payload.code;
+      throw error;
+    }
     return payload;
   }
 
@@ -44,26 +52,45 @@
     liveConnect.textContent = 'Kết nối file';
   }
 
-  liveConnect.onclick = async () => {
+  function liveConnected() {
+    const label = 'Đã kết nối · ' + liveSession.file;
+    if (liveStatus.textContent !== label) liveStatus.textContent = label;
+  }
+
+  async function liveSetConnection(connect, automatic = false) {
     if (liveBusy) return;
     liveBusy = true;
     liveConnect.disabled = true;
     try {
-      if (liveSession) {
+      if (!connect) {
         await livePost('detach', {});
         liveClear();
         liveStatus.textContent = 'Đã ngắt kết nối';
       } else {
         liveSession = await liveCall('attach', await callMain('liveFile', {}));
         liveConnect.textContent = 'Ngắt kết nối';
-        liveStatus.textContent = 'Đã kết nối · ' + liveSession.file;
+        liveConnected();
       }
     } catch (err) {
-      liveStatus.textContent = err.message;
+      if (err.code === 'session_changed') liveClear();
+      if (automatic && err.code === 'session_in_use') {
+        liveStatus.textContent = 'Đang chờ phiên ở cửa sổ plugin khác.';
+      } else if (automatic && err instanceof TypeError) {
+        liveStatus.textContent = 'Đang chờ cầu nối.';
+      } else {
+        liveStatus.textContent = err.message;
+      }
     } finally {
+      liveNextAttach = Date.now() + LIVE_RECONNECT_DELAY;
       liveBusy = false;
       liveConnect.disabled = false;
     }
+  }
+
+  liveConnect.onclick = () => {
+    if (liveBusy) return;
+    liveWantConnection = !liveSession;
+    return liveSetConnection(liveWantConnection);
   };
 
   function liveRender(batch) {
@@ -94,15 +121,29 @@
   }
 
   async function livePoll() {
-    if (!liveSession) return;
+    if (!liveSession) {
+      if (liveWantConnection && !inflight && Date.now() >= liveNextAttach) {
+        await liveSetConnection(true, true);
+      }
+      return;
+    }
+    const session = liveSession;
     try {
       if (liveBusy || inflight) {
-        await livePost('touch', {});
+        if (liveTouching) return;
+        liveTouching = true;
+        try {
+          await livePost('touch', {});
+          if (liveSession === session) liveConnected();
+        } finally {
+          liveTouching = false;
+        }
         return;
       }
       liveBusy = true;
       try {
         const { job, batch } = await livePost('poll', {});
+        liveConnected();
         if (batch?.state === 'ready' && liveBatch?.id !== batch.id) {
           liveBatch = batch;
           liveRender(batch);
@@ -112,8 +153,13 @@
         liveBusy = false;
       }
     } catch (err) {
-      liveStatus.textContent = err.message;
-      liveClear();
+      if (liveSession !== session) return;
+      if (err.code === 'session_changed') {
+        liveClear();
+        liveStatus.textContent = err.message;
+      } else {
+        liveStatus.textContent = 'Đang thử kết nối lại · ' + err.message;
+      }
     }
   }
 
@@ -167,4 +213,11 @@
   }
 
   setInterval(livePoll, 700);
+  window.addEventListener('pagehide', () => {
+    if (!liveSession || liveBusy) return;
+    fetch(LIVE_URL + 'detach', {
+      method: 'POST', headers: { 'X-Design-Sync-Key': LIVE_KEY },
+      body: JSON.stringify({ session: liveSession.id }), keepalive: true,
+    }).catch(() => {});
+  });
 </script>

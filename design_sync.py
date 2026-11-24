@@ -52,7 +52,7 @@ def project_readme(cfg: dict) -> str:
         "",
         "1. Dựng plugin (đứng ở gốc repo): `python design_sync.py build`",
         "2. Figma: Plugins → Development → Import plugin from manifest… → `project/dist/manifest.json` (chỉ làm 1 lần).",
-        f"3. Chạy `python design_sync.py doctor`, mở plugin **{cfg['name']}** trong file đích và bấm **Kết nối file**.",
+        f"3. Chạy `python design_sync.py doctor` và mở plugin **{cfg['name']}** trong file đích để tự kết nối.",
         "4. Sửa xong thì commit thư mục `project/` và push lên repo của team để người khác pull về.",
         "",
         "Chiều ngược Figma → repo: `python design_sync.py pull` rồi `python design_sync.py figma-diff` (xem `docs/workflow.md` mục 6)."
@@ -199,7 +199,7 @@ def cmd_doctor(args):
     print_json({
         "ready": bool(status["session"]), "manifest": str(manifest_file), "readOnly": cfg.get("readOnly", False),
         "snapshot": str(state_dir(args) / "index.json"), **status,
-        "next": "Chạy pull để đọc thiết kế." if status["session"] else "Import hoặc mở plugin trong đúng file Figma rồi bấm Kết nối file.",
+        "next": "Chạy pull để đọc thiết kế." if status["session"] else "Mở plugin trong đúng file Figma để tự kết nối. Nếu đã ngắt thủ công, bấm Kết nối file.",
     })
 
 
