@@ -73,7 +73,7 @@ const DESIGN_EXTENSION = {
       id: 'getting-started',
       title: '1 · Bắt đầu',
       screens: [
-        { stem: 'welcome', title: 'Chào mừng', desc: 'Màn mẫu khởi đầu của Design Sync Toolkit (Sáng & Tối).', cta: 'Bắt đầu ngay' },
+        { stem: 'welcome', title: 'Màn kiểm thử', desc: 'Nội dung dùng trong bộ kiểm hồi quy.', cta: 'Bắt đầu ngay' },
       ],
     },
   ],

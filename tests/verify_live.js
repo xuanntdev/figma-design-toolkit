@@ -118,6 +118,80 @@ async function libraryImpact(env) {
   assert.equal(variable.valuesByMode[modeId], 16);
 }
 
+function componentOverrideFixture(env) {
+  const { page, a, b, c } = env;
+  const variants = add(page, 'COMPONENT_SET', 'Nút');
+  const component = add(variants, 'COMPONENT', 'Mặc định');
+  const variant = add(variants, 'COMPONENT', 'Khác');
+  const text = { characters: 'Tiếp tục', fontSize: 14, fontName: { family: 'Inter', style: 'Regular' } };
+  const label = add(component, 'TEXT', 'Nhãn', text);
+  const hint = add(component, 'TEXT', 'Gợi ý', text);
+  const instance = (parent, name, main, attrs = {}) => add(parent, 'INSTANCE', name, {
+    getMainComponentAsync: async () => main, overrides: [], ...attrs,
+  });
+  const plain = instance(a, 'Nút giữ liên kết', component);
+  const overridden = instance(b, 'Nút có chữ riêng', component);
+  const mixed = instance(c, 'Nút giữ liên kết', component);
+  const row = (inst, node, ...fields) => ({ id: 'I' + inst.id + ';' + node.id, overriddenFields: fields });
+  mixed.overrides = [row(mixed, hint, 'characters'), row(mixed, label, 'fontSize')];
+  overridden.overrides = [row(overridden, label, 'characters')];
+  const otherVariant = instance(b, 'Nút biến thể khác', variant);
+  return { label, plain, overridden, mixed, row, component, otherVariant, instance };
+}
+
+async function componentOverrides(env) {
+  const { call, a, b, c, other } = env;
+  const { label, plain, overridden, mixed, row, otherVariant } = componentOverrideFixture(env);
+  await call('liveProtect', { pageId: other.id, blocked: true });
+  const impact = await call('liveImpact', { nodeId: label.id });
+  assert.equal(impact.instances.find((item) => item.instanceId === overridden.id).effects[0].overridden[0], 'characters');
+  assert.equal(impact.instances.some((item) => item.instanceId === otherVariant.id), false);
+  const edits = [patch(label, 'Xác nhận')];
+  await assert.rejects(() => call('liveEdit', { edits }), /sửa nhiều màn/);
+  const preview = await call('liveStage', { jobId: 'component', edits });
+  assert.equal(preview.changes.find((item) => item.frameId === a.id).inherited, true);
+  assert.match(preview.changes.find((item) => item.frameId === c.id).details[0], /Kế thừa: characters/);
+  assert.equal(preview.blocked.length, 0, 'Lan truyền từ component gốc đến page cấm vẫn được liệt kê');
+  assert.equal(preview.overridden.length, 1);
+  assert.equal(preview.overridden[0].frameId, b.id);
+  assert.match(preview.overridden[0].details[0], /Nhãn · Giữ override: characters/);
+
+  const multiField = await call('liveStage', { jobId: 'component-two-fields', edits: [
+    { nodeId: label.id, set: { characters: 'Xác nhận', fontSize: 16 } },
+  ] });
+  const mixedDetails = multiField.changes.find((item) => item.frameId === c.id).details.join();
+  assert.match(mixedDetails, /Kế thừa: characters/);
+  assert.match(mixedDetails, /Giữ override: fontSize/);
+  await call('liveStage', { jobId: 'component', edits });
+  mixed.overrides.push(row(mixed, label, 'characters'));
+  await assert.rejects(() => call('liveApply', { jobId: 'component' }), /đã đổi/);
+  assert.equal(label.characters, 'Tiếp tục');
+  assert.equal((await call('liveEdit', { edits })).changed, 1, 'Chỉ còn một màn kế thừa thì sửa trực tiếp được');
+  assert.equal(label.characters, 'Xác nhận');
+  plain.overrides = [row(plain, label, 'characters')];
+  label.componentPropertyReferences = { visible: 'Show#1:2' };
+  label.visible = true;
+  const uncertain = await call('liveStage', { jobId: 'component-visible', edits: [{ nodeId: label.id, set: { visible: false } }] });
+  assert.match(uncertain.changes.find((item) => item.frameId === a.id).details[0], /Cần kiểm tra: visible/);
+}
+
+async function nestedComponentOverrides(env) {
+  const { call, page, a } = env;
+  const { label, component, row, instance } = componentOverrideFixture(env);
+  const wrapper = add(page, 'COMPONENT', 'Khung bọc');
+  const source = instance(wrapper, 'Nút nguồn trong khung bọc', component);
+  const outer = instance(a, 'Khung bọc trên màn', wrapper);
+  const nested = instance(outer, 'Nút lồng nhau', component, { id: 'I' + outer.id + ';' + source.id });
+  const edits = [patch(label, 'Xác nhận')];
+  outer.overrides = [{ id: nested.id + ';' + label.id, overriddenFields: ['characters'] }];
+  const direct = await call('liveStage', { jobId: 'nested-direct', edits });
+  assert.match(direct.changes.find((item) => item.frameId === a.id).details.join(), /Nút lồng nhau.*Giữ override: characters/);
+  outer.overrides = [];
+  source.overrides = [row(source, label, 'characters')];
+  const inherited = await call('liveStage', { jobId: 'nested-inherited', edits });
+  assert.match(inherited.changes.find((item) => item.frameId === a.id).details.join(), /Nút lồng nhau.*Giữ override: characters/);
+}
+
 async function rollbackOnError(env) {
   const { a, x, call } = env;
   Object.defineProperty(a, 'itemSpacing', {
@@ -160,9 +234,11 @@ async function main() {
   await stagedEdits(env);
   await createAndRead(env);
   await libraryImpact(env);
+  await componentOverrides(fixture(process.argv[2]));
+  await nestedComponentOverrides(fixture(process.argv[2]));
   await rollbackOnError(env);
   await rebuildKeepsPrototype(env);
-  console.log('verify_live.js: selection, ghi trực tiếp, chặn page, lô sửa, tạo/clone, biến, khôi phục và prototype đạt');
+  console.log('verify_live.js: selection, ghi trực tiếp, chặn page, lô sửa, override, tạo/clone, biến, khôi phục và prototype đạt');
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });

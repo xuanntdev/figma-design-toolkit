@@ -1,8 +1,8 @@
 {
   "items": [
     {
-      "title": "1 · Bắt đầu (1 màn mẫu)",
-      "desc": "Chào mừng (Sáng & Tối)"
+      "title": "1 · Kiểm thử bộ dựng",
+      "desc": "Kiểm thử hai chủ đề"
     }
   ],
   "screenIds": ["welcome"],

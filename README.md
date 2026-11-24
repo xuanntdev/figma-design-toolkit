@@ -1,6 +1,6 @@
 # Design Sync Toolkit cho Figma
 
-Bộ công cụ cho BA, trợ lý AI và dev đọc thiết kế, dựng và sửa màn trong Figma Desktop. Plugin dùng cầu nối `localhost` của mỗi checkout. Yêu cầu Git, Figma Desktop và Python 3.10+.
+Bộ công cụ cho BA, trợ lý AI và dev đọc thiết kế, dựng và sửa màn qua plugin được import từ manifest trong Figma Desktop. CLI kết nối tới plugin qua cầu nối `localhost` của mỗi checkout. Toolkit không gọi Figma REST API, không dùng Figma MCP và không yêu cầu access token Figma. Yêu cầu Git, Figma Desktop và Python 3.10+.
 
 ## Cách hoạt động
 
@@ -23,7 +23,7 @@ Mỗi dự án clone kit thành repo thiết kế của chính dự án: đặt 
 ```sh
 git clone https://github.com/xuanntdev/figma-design-toolkit.git <dự-án>-design
 cd <dự-án>-design
-python design_sync.py init --name "Tên dự án" --empty
+python design_sync.py init --name "Tên dự án"
 python design_sync.py build
 python design_sync.py doctor
 ```
@@ -40,7 +40,7 @@ Trong Figma Desktop, chọn **Plugins → Development → Import plugin from man
 | `kit_core/` | Mã plugin, bridge, cấu hình và đọc thiết kế |
 | `docs/` | Hướng dẫn cài đặt, tích hợp và sử dụng |
 | `tests/`, `verify_release.py` | Ca kiểm và lệnh chạy toàn bộ |
-| `example/`, `capture/` | Màn mẫu và công cụ nhập ảnh tham chiếu tùy chọn |
+| `capture/` | Công cụ nhập ảnh tham chiếu tùy chọn |
 
 ## Tài liệu
 

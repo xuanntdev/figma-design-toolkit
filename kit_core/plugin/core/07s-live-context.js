@@ -92,30 +92,15 @@ async function liveProtect(args) {
   return { pageId: page.id, page: page.name, blocked: args.blocked };
 }
 
-async function liveComponentImpact(components) {
-  const ids = new Set(components.map((node) => node.id));
-  if (!ids.size) return [];
-  await figma.loadAllPagesAsync();
-  const scopes = new Map();
-  for (const page of figma.root.children) {
-    for (const instance of page.findAllWithCriteria({ types: ['INSTANCE'] })) {
-      const main = await instance.getMainComponentAsync();
-      if (!main || ![main.id, main.parent?.id].some((id) => ids.has(id))) continue;
-      const scope = liveScope(instance);
-      scopes.set(scope.frameId, scope);
-    }
-  }
-  return [...scopes.values()];
-}
-
 async function liveImpact(args) {
   if (args.variableId) {
     const variable = await liveVariable(args.variableId);
     return { variable: variable.name, inherited: await liveVariableImpact([variable.id]) };
   }
   const node = await liveNode(args.nodeId);
-  const component = liveComponent(node);
-  return { target: liveScope(node), inherited: await liveComponentImpact(component ? [component] : []) };
+  const instances = await liveComponentImpact([{ node }]);
+  const inherited = new Map(instances.map(({ scope }) => [scope.frameId, scope]));
+  return { target: liveScope(node), inherited: [...inherited.values()], instances };
 }
 
 Object.assign(PLUGIN_COMMANDS, { liveFile, liveSelection, liveTree, liveProtect, liveImpact });

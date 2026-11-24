@@ -35,7 +35,7 @@ Rồi viết luật cho khối của chính web mình (`linkRules` / `linkTokens
 
 ## Sinh plan và build
 
-Sau `init`, thay màn mẫu bằng bộ dựng snapshot có sẵn: `rm project/extension/01-screens.js && cp capture/extension/*.js project/extension/`. Rồi:
+Sau `init`, chép bộ dựng snapshot vào dự án bằng `cp capture/extension/*.js project/extension/`. Rồi:
 
 ```sh
 node capture/gen-plan.mjs            # project/snapshots/*/group.json → project/extension/data/<nhóm>.gen.json + project/draft-plan.json

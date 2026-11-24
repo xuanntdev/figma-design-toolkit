@@ -68,14 +68,14 @@
 
   function liveRender(batch) {
     if (readOnly) return;
-    const rows = batch.preview.changes.concat(batch.preview.blocked);
-    renderRows(rows.map((row) => ({
-      title: row.page + ' · ' + row.screen, desc: row.details.join(', '),
-      badge: row.blocked ? 'Cấm ghi' : '',
-    })));
+    const render = (rows, badge = '') => rows.map((row) => ({
+      title: row.page + ' · ' + row.screen, desc: row.details.join(', '), badge,
+    }));
+    const { changes, blocked, overridden = [] } = batch.preview;
+    renderRows([...render(changes), ...render(blocked, 'Cấm ghi'), ...render(overridden, 'Giữ override')]);
     btnUpdate.hidden = false;
     liveDiscard.hidden = false;
-    setStatus('Bấm Cập nhật để ghi các màn đã liệt kê.');
+    setStatus('Bấm Cập nhật để áp dụng lượt sửa.');
   }
 
   async function liveRun(job) {

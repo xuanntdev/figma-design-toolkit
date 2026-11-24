@@ -7,8 +7,9 @@ description: Set up this Figma Design Toolkit, read the connected Figma selectio
 
 ## Xác định dự án
 
+- Chỉ dùng plugin Development của toolkit trong Figma Desktop để truy cập thiết kế. Hướng dẫn người dùng vào **Plugins → Development → Import plugin from manifest…** và chọn `project/dist/manifest.json`. Kết nối bằng CLI của toolkit qua `localhost`. Không gọi Figma REST API, không dùng Figma MCP và không yêu cầu access token Figma.
 - Repo dự án là bản clone của kit. Cấu hình nằm ở `project/design-sync.json`; chạy `python design_sync.py <lệnh>` từ gốc repo.
-- Với repo chỉ có kit, chạy `python design_sync.py init --name "<tên dự án>" --empty`, `build` và `doctor`. Giữ cấu hình khi dự án đã được khởi tạo. Cách thiết lập repo riêng có ở [hướng dẫn setup](../../../docs/setup.md).
+- Với repo chỉ có kit, chạy `python design_sync.py init --name "<tên dự án>"`, `build` và `doctor`. Giữ cấu hình khi dự án đã được khởi tạo. Cách thiết lập repo riêng có ở [hướng dẫn setup](../../../docs/setup.md).
 - Giữ một plugin cho mỗi dự án. Dùng cùng ID và đường dẫn manifest cho việc ghép file, dựng màn và duyệt lô. Khi đổi kế hoạch builder, chạy `build --plan <tệp>` và mở lại plugin đã import.
 
 ## Đọc thiết kế

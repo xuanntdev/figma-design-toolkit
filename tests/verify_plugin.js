@@ -135,7 +135,7 @@ async function testSectionMirror(bundlePath) {
     grp.x = 64; grp.y = 100; grp.resize(600, 1020);
     grp.fills = [{ type: 'SOLID', color: { r: 0.92, g: 0.94, b: 0.98 } }];
     grp.cornerRadius = 16;
-    const f1 = new MockNode('FRAME'); f1.name = 'Chào mừng'; f1.x = 60; f1.y = 90; f1.resize(393, 873);
+    const f1 = new MockNode('FRAME'); f1.name = 'Màn kiểm thử'; f1.x = 60; f1.y = 90; f1.resize(393, 873);
     grp.appendChild(f1);
     area.appendChild(grp); cur.appendChild(area);
   }
@@ -174,7 +174,7 @@ function sectionPage(withGroup) {
   if (withGroup) {
     const area = new MockNode('SECTION'); area.name = 'Sáng';
     const grp = new MockNode('SECTION'); grp.name = '1 · Bắt đầu';
-    const manual = new MockNode('FRAME'); manual.name = 'Chào mừng'; manual.x = 60; manual.y = 90; manual.resize(393, 873);
+    const manual = new MockNode('FRAME'); manual.name = 'Màn kiểm thử'; manual.x = 60; manual.y = 90; manual.resize(393, 873);
     grp.appendChild(manual); area.appendChild(grp); cur.appendChild(area);
   }
   return { page, cur, imp };

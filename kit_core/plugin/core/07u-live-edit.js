@@ -29,7 +29,26 @@ function livePreviewStep({ key, before, after }) {
   return key + ' ' + display(before) + ' → ' + display(after);
 }
 
-function liveSummarizeEdits(rows, inherited) {
+function liveComponentPreview(screens, instances) {
+  const overridden = new Map();
+  for (const { scope, instance, effects } of instances) {
+    const item = screens.get(scope.frameId) || overridden.get(scope.frameId) || { ...scope, details: [] };
+    for (const effect of effects) {
+      const target = instance + ' / ' + effect.layer;
+      if (effect.inherited.length) item.details.push(target + ' · Kế thừa: ' + effect.inherited.join(', '));
+      if (effect.overridden.length) item.details.push(target + ' · Giữ override: ' + effect.overridden.join(', '));
+      if (effect.uncertain.length) item.details.push(target + ' · Cần kiểm tra: ' + effect.uncertain.join(', '));
+      if (effect.inherited.length || effect.uncertain.length) item.inherited = true;
+    }
+    if (item.inherited || screens.has(scope.frameId)) {
+      screens.set(scope.frameId, item);
+      overridden.delete(scope.frameId);
+    } else overridden.set(scope.frameId, item);
+  }
+  return [...overridden.values()];
+}
+
+function liveSummarizeEdits(rows, instances, inherited) {
   const screens = new Map();
   for (const row of rows) {
     const scope = row.scope;
@@ -43,7 +62,10 @@ function liveSummarizeEdits(rows, inherited) {
   for (const scope of inherited) {
     if (!screens.has(scope.frameId)) screens.set(scope.frameId, { ...scope, details: ['Thay đổi kế thừa'], inherited: true });
   }
-  return { changes: [...screens.values()].filter((row) => !row.blocked), blocked: [...screens.values()].filter((row) => row.blocked) };
+  const overridden = liveComponentPreview(screens, instances);
+  const changes = [...screens.values()].filter((row) => !row.blocked);
+  const blocked = [...screens.values()].filter((row) => row.blocked);
+  return { changes, blocked, overridden };
 }
 
 async function livePlanEdits(args) {
@@ -56,16 +78,17 @@ async function livePlanEdits(args) {
   const rows = [];
   for (const edit of edits) rows.push(await liveEditRow(edit, protectedPages));
   const writeRows = rows.filter((row) => row.steps.some((step) => !liveEqual(step.before, step.after)));
-  const inherited = [
-    ...await liveComponentImpact(writeRows.map((row) => liveComponent(row.node)).filter(Boolean)),
-    ...await liveVariableImpact(writeRows.map((row) => row.variableId).filter(Boolean)),
-  ].sort((a, b) => a.frameId.localeCompare(b.frameId));
-  const preview = liveSummarizeEdits(rows, inherited);
+  const instances = await liveComponentImpact(writeRows.map(({ node, steps }) => ({
+    node, fields: [...new Set(steps.flatMap(liveChangedFields))].sort(),
+  })));
+  const inherited = await liveVariableImpact(writeRows.map((row) => row.variableId).filter(Boolean));
+  inherited.sort((a, b) => a.frameId.localeCompare(b.frameId));
+  const preview = liveSummarizeEdits(rows, instances, inherited);
   const identity = rows.map((row) => ({
     scope: row.scope, id: row.node?.id || row.variableId, blocked: row.blocked,
     before: row.steps.map(({ key, before, context }) => ({ key, before, context })),
   }));
-  const fingerprint = JSON.stringify(liveStable({ identity, inherited }));
+  const fingerprint = JSON.stringify(liveStable({ identity, instances, inherited }));
   return { writeRows, preview, fingerprint };
 }
 

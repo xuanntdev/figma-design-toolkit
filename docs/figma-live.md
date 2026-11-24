@@ -2,13 +2,15 @@
 
 ## Kết nối
 
+Mọi thao tác đọc và sửa thiết kế trong hướng dẫn này đi qua plugin Development chạy trong Figma Desktop. CLI trao đổi với plugin qua `localhost`. Toolkit không gọi Figma REST API, không dùng Figma MCP và không yêu cầu access token Figma.
+
 ```sh
-python design_sync.py init --name "Team Design" --empty
+python design_sync.py init --name "Team Design"
 python design_sync.py build
 python design_sync.py doctor
 ```
 
-Import `project/dist/manifest.json` trong Figma Desktop. Mở plugin trong file đích rồi bấm **Kết nối file**. Mỗi phiên ghép một file, giữ plugin mở trong lúc chat. Qua file khác, dùng **Ngắt kết nối** rồi kết nối ở file mới. Nếu đóng plugin, phiên cũ tự hết hạn. `doctor` báo manifest và bước còn thiếu. Mỗi checkout có khóa cầu nối cục bộ được tự tạo khi build.
+Trong Figma Desktop, chọn **Plugins → Development → Import plugin from manifest…** và mở `project/dist/manifest.json`. Mở plugin trong file đích rồi bấm **Kết nối file**. Mỗi phiên ghép một file, giữ plugin mở trong lúc chat. Qua file khác, dùng **Ngắt kết nối** rồi kết nối ở file mới. Nếu đóng plugin, phiên cũ tự hết hạn. `doctor` báo manifest và bước còn thiếu. Khóa cầu nối `localhost` được tạo khi build.
 
 Cùng popup dùng cho thao tác theo selection, lô chờ **Cập nhật** và bộ dựng dự án nếu có. Khi đổi danh sách bộ dựng, dùng `build --plan <tệp>` với đường dẫn manifest đã import.
 
@@ -59,6 +61,8 @@ python design_sync.py protect unblock "1:2" --session "<session>"
 Thay đổi hỗ trợ tên, chữ một font, font, bố cục, kích thước, fill/stroke, style ID, property của instance và binding biến. `componentProperties` dùng đúng khóa property đầy đủ từ cây layer. `fills` và `strokes` nhận danh sách `{"color":"#RRGGBB","opacity":1}` hoặc `{"variableId":"VariableID:1:7"}`. `bindings` nhận cặp trường và variable ID hoặc null. Dùng `expect` để buộc thuộc tính còn đúng giá trị đã đọc.
 
 `edit` ghi ngay khi toàn bộ thay đổi nằm trong một màn. `stage` dùng cùng schema cho sửa hàng loạt. Nó hiện các màn, layer và đích bị cấm, rồi chờ nút **Cập nhật** trong plugin. Nếu đích, giá trị hoặc quyền đã đổi từ lúc xem, chuẩn bị lại lượt cập nhật. `status` trả trạng thái lượt.
+
+Khi sửa component gốc, danh sách hiện từng instance theo màn. **Kế thừa** liệt kê thuộc tính nhận thay đổi. **Giữ override** liệt kê thuộc tính đang có giá trị riêng trên đúng layer. Một instance có thể xuất hiện với cả hai nhãn nếu sửa nhiều thuộc tính. **Cần kiểm tra** xuất hiện khi plugin chưa xác định được thuộc tính có kế thừa hay không, ví dụ chữ đi qua component property. `impact <node-id>` liệt kê các instance và override của layer đã chọn để đọc trước khi lập lô.
 
 Để sửa biến cục bộ, dùng mục `{"variableId":"VariableID:1:7","modeId":"1:0","value":"#3778E5"}` trong `edits`. Dò phạm vi bằng `impact "VariableID:1:7" --variable --session "<session>"`. ID mode lấy từ `modeIds` trong `tokens.json`.
 

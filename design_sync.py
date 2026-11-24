@@ -4,7 +4,6 @@ import argparse
 import base64
 import json
 import math
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,19 +14,20 @@ from kit_core import bridge, bridge_client, build, config, figma_diff, figma_dif
 BASE = Path(__file__).resolve().parent
 
 
-def load_plan(plan_path: Path | None, extension: Path) -> dict | None:
+def load_plan(plan_path: Path | None, extension: Path | None) -> dict | None:
     if plan_path is not None:
         if not plan_path.is_file():
             raise ValueError(f"Không tìm thấy tệp kế hoạch {plan_path}.")
         return json.loads(plan_path.read_text(encoding="utf-8"))
-    default_plan = extension / "draft-plan.json"
-    if default_plan.is_file():
-        return json.loads(default_plan.read_text(encoding="utf-8"))
+    if extension is not None:
+        default_plan = extension / "draft-plan.json"
+        if default_plan.is_file():
+            return json.loads(default_plan.read_text(encoding="utf-8"))
     return None
 
 
 def build_plugin(
-    extension: Path,
+    extension: Path | None,
     output: Path,
     plan_path: Path | None = None,
     name: str = config.DEFAULT_NAME,
@@ -35,10 +35,10 @@ def build_plugin(
     runtime: dict | None = None,
 ) -> dict:
     plan = load_plan(plan_path, extension)
-    return build.build([extension], output, plan=plan, name=name, plugin_id=plugin_id, runtime=runtime)
+    return build.build([extension] if extension is not None else [], output, plan=plan, name=name, plugin_id=plugin_id, runtime=runtime)
 
 
-def project_readme(cfg: dict, empty: bool = False) -> str:
+def project_readme(cfg: dict) -> str:
     frame = config.parse_frame(cfg["frame"])
     return "\n".join([
         f"# {cfg['name']} · Thiết kế Figma",
@@ -46,7 +46,9 @@ def project_readme(cfg: dict, empty: bool = False) -> str:
         f"- Cấu hình: `{config.CONFIG_NAME}` — tên plugin, cỡ khung ({cfg['frame']}: {frame['width']}×{frame['height']}),"
         f" khung đích `{cfg['target']}` (improved = Cải tiến, current = Hiện tại), đổi tên khung qua `labels`.",
         "- Thiết kế đọc từ file Figma đã ghép. Xem hướng dẫn tại `../docs/figma-live.md`.",
-        "- Dự án sẵn sàng ghép file Figma." if empty else "- Builder mẫu: `extension/01-screens.js`, với danh sách màn trong `draft-plan.json`.",
+        "- CLI kết nối với plugin Development trong Figma Desktop qua `localhost`."
+        " Toolkit không gọi Figma REST API, không dùng Figma MCP và không yêu cầu access token Figma.",
+        "- Thêm bộ dựng của dự án vào `extension/` và khai danh sách màn trong `draft-plan.json` khi cần.",
         "",
         "1. Dựng plugin (đứng ở gốc repo): `python design_sync.py build`",
         "2. Figma: Plugins → Development → Import plugin from manifest… → `project/dist/manifest.json` (chỉ làm 1 lần).",
@@ -75,27 +77,23 @@ def cmd_init(args: argparse.Namespace) -> None:
     ext_dir = project / "extension"
     ext_dir.mkdir(parents=True, exist_ok=True)
     config.write(project, cfg)
-    if args.empty:
-        (ext_dir / ".gitkeep").touch()
-        (project / "draft-plan.json").write_text('{"screenIds": []}\n', encoding="utf-8")
-    else:
-        shutil.copyfile(BASE / "example" / "extension.js", ext_dir / "01-screens.js")
-        shutil.copyfile(BASE / "example" / "draft-plan.json", project / "draft-plan.json")
+    (ext_dir / ".gitkeep").touch()
+    (project / "draft-plan.json").write_text('{"screenIds": []}\n', encoding="utf-8")
     (project / ".gitignore").write_text("/dist/\n/.bridge-key\n", encoding="utf-8")
-    (project / "README.md").write_text(project_readme(cfg, args.empty), encoding="utf-8")
+    (project / "README.md").write_text(project_readme(cfg), encoding="utf-8")
     print(f"Đã khởi tạo dự án tại {project} · plugin \"{cfg['name']}\" · khung {cfg['frame']} · đích {cfg['target']}")
 
 
 def resolve(args: argparse.Namespace) -> dict:
     """Có project/ (design-sync.json) thì dựng dự án; cờ truyền tay luôn thắng. Truyền --extension nghĩa là
-    dựng thủ công (không đọc project/). Chưa init thì dựng plugin mẫu từ example/."""
+    dựng thủ công (không đọc project/). Chưa init thì dựng plugin chỉ có lõi."""
     project = args.project_dir if args.extension is None and has_project(args) else None
     if args.extension is None and project is None and args.project_dir != BASE / "project":
         raise ValueError(f"Chưa có {config.CONFIG_NAME} trong {args.project_dir}. Chạy init cho thư mục này trước.")
     cfg = config.load(project) if project else {}
     return {
         "project": project,
-        "extension": args.extension or (project / "extension" if project else BASE / "example"),
+        "extension": args.extension or (project / "extension" if project else None),
         "plan": getattr(args, "plan", None) or (project / "draft-plan.json" if project else None),
         "out": getattr(args, "out", None) or (project / "dist" if project else BASE / "plugin"),
         "name": getattr(args, "name", None) or cfg.get("name") or config.DEFAULT_NAME,
@@ -119,9 +117,9 @@ def cmd_build(args: argparse.Namespace) -> None:
 def cmd_check(args: argparse.Namespace) -> None:
     r = resolve(args)
     extension = r["extension"]
-    if not extension.is_dir():
+    if extension is not None and not extension.is_dir():
         raise ValueError(f"Không tìm thấy thư mục extension {extension}.")
-    files = build.collect(extension)
+    files = build.collect(extension if extension is not None else build.PLUGIN_DIR / "core")
     problems = build.check(files)
     if problems:
         for item in problems:
@@ -177,7 +175,7 @@ def has_project(args: argparse.Namespace) -> bool:
 
 def client(args):
     if not has_project(args):
-        raise ValueError('Chưa có dự án. Chạy init --name "<dự án>" --empty rồi build.')
+        raise ValueError('Chưa có dự án. Chạy init --name "<dự án>" rồi build.')
     return live_client.Client(bridge_port(args, required=True), Path(__file__).resolve(), args.project_dir, state_dir(args))
 
 
@@ -187,7 +185,7 @@ def print_json(result):
 
 def cmd_doctor(args):
     if not has_project(args):
-        return print_json({"ready": False, "next": 'Chạy init --name "<dự án>" --empty, rồi build.'})
+        return print_json({"ready": False, "next": 'Chạy init --name "<dự án>", rồi build.'})
     manifest_file = args.project_dir / "dist" / "manifest.json"
     if not manifest_file.is_file():
         return print_json({"ready": False, "next": "Chạy build.", "manifest": str(manifest_file)})
@@ -268,10 +266,10 @@ def parser() -> argparse.ArgumentParser:
     init_cmd.add_argument("--id", default=None, help="ID plugin (mặc định sinh từ --name).")
     init_cmd.add_argument("--frame", default="desktop", help="Cỡ khung: desktop | tablet | mobile | RỘNGxCAO (mặc định desktop).")
     init_cmd.add_argument("--target", default="improved", choices=config.TARGETS, help="Khung nhận màn dựng: improved = Cải tiến, current = Hiện tại.")
-    init_cmd.add_argument("--empty", action="store_true", help="Khởi tạo để làm việc với file Figma sẵn có hoặc canvas trắng.")
+    init_cmd.add_argument("--empty", action="store_true", help=argparse.SUPPRESS)
     init_cmd.set_defaults(handler=cmd_init)
 
-    bundle = commands.add_parser("build", help="Dựng plugin cho dự án project/ ra project/dist/ (chưa init thì dựng mẫu example/).")
+    bundle = commands.add_parser("build", help="Dựng plugin ra project/dist/ hoặc dựng riêng lõi ra plugin/ trước khi init.")
     bundle.add_argument("--extension", type=Path, default=None, help="Dựng thủ công từ thư mục extension này, bỏ qua project/.")
     bundle.add_argument("--plan", type=Path, default=None, help="Tệp draft-plan.json (mặc định project/draft-plan.json).")
     bundle.add_argument("--out", type=Path, default=None, help="Thư mục đầu ra (mặc định project/dist/, chưa init thì plugin/).")

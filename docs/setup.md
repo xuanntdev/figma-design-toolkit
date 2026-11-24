@@ -2,6 +2,8 @@
 
 ## Thiết lập cho team
 
+Toolkit làm việc qua plugin Development được import bằng manifest trong Figma Desktop. CLI gửi lệnh tới plugin qua `localhost`. Toolkit không gọi Figma REST API, không dùng Figma MCP và không yêu cầu access token Figma.
+
 Mỗi dự án **clone kit thành repo thiết kế của chính dự án** và dùng luôn repo đó. Repo đặt tên theo dự án (vd `my-app-design`). Tên dự án truyền qua `init --name` thành tên plugin, tiêu đề cửa sổ plugin trong Figma và tiêu đề `project/README.md`; `id` plugin sinh từ tên này. Màn của dự án nằm trong `project/`: `design-sync.json` (cấu hình), `extension/` (mã dựng màn), `draft-plan.json` (danh sách màn sẽ dựng). Thư mục này được commit để cả team (dev, BA, designer) cùng sửa và xem. Bản build `project/dist/` và khoá `project/.bridge-key` đã bị `.gitignore` của kit chặn nên không vào repo.
 
 **1. Clone và chuyển sang repo của team** (một người làm một lần):
@@ -10,7 +12,7 @@ git clone https://github.com/xuanntdev/figma-design-toolkit.git my-app-design   
 cd my-app-design
 git remote rename origin upstream                 # giữ kit gốc để lấy bản cập nhật
 git remote add origin <url-repo-của-team>
-python design_sync.py init --name "Tên dự án" --frame desktop --empty
+python design_sync.py init --name "Tên dự án" --frame desktop
 git add project && git commit -m "Init design project" && git push -u origin main
 ```
 
@@ -28,9 +30,7 @@ Mỗi dự án dùng cùng plugin cho kết nối, thao tác trực tiếp, duy�
 
 **Cập nhật kit:** `git pull upstream main`. Kit gốc không bao giờ chứa `project/`, nên không đụng vào màn của team.
 
-> Nếu bỏ `--empty`, dự án có màn mẫu `welcome` cho luồng builder.
->
-> Chưa `init` thì `python design_sync.py build` dựng plugin mẫu từ `example/` ra `plugin/`.
+`init` tạo dự án trống để ghép một file Figma. Thêm mã vào `project/extension/` khi cần dựng màn bằng builder. Trước khi `init`, `build` dựng riêng lõi vào `plugin/`.
 
 ## Cấu hình dự án (`project/design-sync.json`)
 
