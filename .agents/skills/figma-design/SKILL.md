@@ -1,6 +1,6 @@
 ---
 name: figma-design
-description: Set up this Figma Design Toolkit, read the connected Figma selection and design system, create or edit native screens, stage bulk edits, and manage toolkit write protection on pages.
+description: Set up this Figma Design Toolkit, read the connected Figma selection and design system, create or edit native screens, dim screens pending manual deletion, stage bulk edits, and manage toolkit write protection on pages.
 ---
 
 # Thiết kế trong file Figma đã ghép
@@ -24,4 +24,5 @@ description: Set up this Figma Design Toolkit, read the connected Figma selectio
 - Khi dựng hoặc rà cả Sáng và Tối, đọc [cách dùng biến và biến thể theo vai trò](../../../docs/workflow.md#bề-mặt-trong-sáng-và-tối). Chọn variant và token theo mục đích của khối, kể cả khi hai vai trò trùng mã màu trong một mode. Đọc lại binding, xuất ảnh cả hai mode và kiểm tương phản chữ phụ trên nền thẻ thực tế.
 - Không gửi ảnh thì tham chiếu màn cùng luồng và dùng lại style, token và component của Figma. Ảnh gần giống một màn hiện có thì nhân bản màn làm nền và sửa phần khác biệt. Với ảnh khác rõ, dùng hình ảnh làm yêu cầu về bố cục và hình thức, dựng ra layer có thể chỉnh và dùng lại thành phần phù hợp. Dùng bản xuất Figma đã đọc khi chuẩn bị offline. Ảnh local/capture dùng khi người dùng chỉ định.
 - Ghi ngay khi plugin đang kết nối, page cho ghi và yêu cầu xác định được một item/màn hoặc tạo màn. Đọc lại đích sau khi ghi. Tạo màn với `create`, sửa tại chỗ với `edit`. Tài liệu JSON ở [Figma trực tiếp](../../../docs/figma-live.md).
+- Khi người dùng yêu cầu xóa hoặc thay rồi xóa một màn, giữ frame cũ để người dùng tự xóa trong Figma. Xác định ID của frame màn hình trong phiên đang ghép và chỉ đặt `set: {"opacity": 0.35}` lên frame đó. Dùng `edit` cho một màn và `stage` nếu có nhiều màn. Báo tên màn đã làm mờ để người dùng nhận ra màn chờ xóa.
 - Trước khi sửa component hoặc token chung, xem `impact`. Khi sửa hàng loạt, dùng `stage`, đưa người dùng danh sách cụ thể, rồi chờ họ bấm **Cập nhật** trong Figma. Báo kết quả qua `status` khi cần. Nếu chạm page bị cấm, báo đích và chỉ gỡ cấm khi người dùng yêu cầu.
