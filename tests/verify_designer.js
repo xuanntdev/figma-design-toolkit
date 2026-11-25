@@ -25,7 +25,7 @@ function screen(page) {
   card.fills = [solid(1, 1, 1)];
   node('TEXT', { name: 'Nhãn', characters: 'Số hợp đồng', fontName: { family: 'Inter', style: 'Medium' }, fontSize: 13, lineHeight: { unit: 'PIXELS', value: 20 }, fills: [solid(0.2, 0.2, 0.2)], textAlignHorizontal: 'CENTER' }, card);
   node('TEXT', { name: 'Có style', characters: 'Khảo sát', textStyleId: 'S:body', fills: [{ ...solid(0, 0, 0), boundVariables: { color: { id: 'V1' } } }] }, card);
-  const wrap = node('FRAME', { name: 'Bọc', fills: [{ ...solid(1, 1, 1), opacity: 0 }] }, card);
+  const wrap = node('FRAME', { name: 'Bọc', fills: [{ ...solid(1, 1, 1), opacity: 0.002 }] }, card);
   node('RECTANGLE', { name: 'Lõi', fills: [], strokes: [solid(1, 0, 0)], strokeWeight: 1 }, wrap);
   const icon = node('FRAME', { name: 'Khung icon', width: 20, height: 20 }, card);
   node('VECTOR', { name: 'Vector', width: 15, height: 15, fills: [] }, icon);

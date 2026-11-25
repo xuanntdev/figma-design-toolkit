@@ -3,6 +3,11 @@
 
 const LINT_LIMIT = 100;
 const LINT_RULES = ['raw-fill', 'raw-stroke', 'no-text-style', 'detached', 'wrapper'];
+const LINT_MIN_OPACITY = 0.01; // dưới 1% coi như không hiển thị (lớp đổ bóng giả, nền gần trong suốt)
+
+function lintShown(p) {
+  return p.visible !== false && !(typeof p.opacity === 'number' && p.opacity < LINT_MIN_OPACITY);
+}
 
 function lintGet(node, key) {
   if (!(key in node)) return undefined;
@@ -13,12 +18,12 @@ function lintRawPaints(node, key, styleKey) {
   const style = lintGet(node, styleKey);
   const paints = lintGet(node, key);
   if ((typeof style === 'string' && style) || !Array.isArray(paints)) return [];
-  return paints.filter((p) => p.visible !== false && p.opacity !== 0 && p.type === 'SOLID' && !(p.boundVariables && p.boundVariables.color))
+  return paints.filter((p) => lintShown(p) && p.type === 'SOLID' && !(p.boundVariables && p.boundVariables.color))
     .map((p) => lkColorKey(toHex(p.color), p.opacity));
 }
 
 function lintVisible(list) {
-  return Array.isArray(list) && list.some((x) => x.visible !== false && x.opacity !== 0);
+  return Array.isArray(list) && list.some(lintShown);
 }
 
 // Khung/nhóm chỉ bọc đúng một con cùng kích thước, không có nền/viền/bóng/padding: không thêm gì, gộp được vào con hoặc cha.
