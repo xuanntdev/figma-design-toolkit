@@ -55,6 +55,7 @@ async function stagedEdits(env) {
   await assert.rejects(() => call('liveEdit', { edits: edits.slice(0, 2) }), /sửa nhiều màn/);
   const stage = await call('liveStage', { jobId: 'preview', edits });
   assert.equal(stage.changes.length, 2);
+  assert.ok(!stage.changes[0].details[0].includes('→'), 'Xem trước gọn chỉ hiện tên thuộc tính, không đổ value');
   assert.equal(stage.blocked[0].pageId, other.id);
   assert.equal(y.characters, 'Tiếp tục');
   y.characters = 'BA đổi trước khi xác nhận';

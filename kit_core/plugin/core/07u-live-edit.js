@@ -25,12 +25,8 @@ async function liveEditRow(edit, protectedPages) {
   return { node, scope, blocked, steps };
 }
 
-function livePreviewStep({ key, before, after }) {
-  const display = (value) => {
-    const text = JSON.stringify(value) ?? '∅';
-    return text.length > 80 ? text.slice(0, 77) + '…' : text;
-  };
-  return key + ' ' + display(before) + ' → ' + display(after);
+function livePreviewStep({ key }) {
+  return key;
 }
 
 function liveComponentPreview(screens, instances) {

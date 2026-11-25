@@ -96,16 +96,44 @@
     return liveSetConnection(liveWantConnection);
   };
 
+  function liveFormatDetails(details) {
+    const list = Array.isArray(details) ? details : [];
+    const MAX_ITEMS = 4;
+    if (list.length <= MAX_ITEMS) return list.join(' · ');
+    return list.slice(0, MAX_ITEMS).join(' · ') + ' … (+' + (list.length - MAX_ITEMS) + ' mục)';
+  }
+
+  function liveToRows(rows, badge = '') {
+    return rows.map((row) => {
+      const count = Array.isArray(row.details) ? row.details.length : 0;
+      return {
+        title: row.page + ' · ' + row.screen,
+        desc: liveFormatDetails(row.details),
+        badge: badge || (row.inherited && count === 1 ? 'Kế thừa' : (count > 1 ? count + ' mục' : '')),
+      };
+    });
+  }
+
   function liveRender(batch) {
     if (readOnly) return;
-    const render = (rows, badge = '') => rows.map((row) => ({
-      title: row.page + ' · ' + row.screen, desc: row.details.join(', '), badge,
-    }));
     const { changes, blocked, overridden = [] } = batch.preview;
-    renderRows([...render(changes), ...render(blocked, 'Cấm ghi'), ...render(overridden, 'Giữ override')]);
+    renderRows([...liveToRows(changes), ...liveToRows(blocked, 'Cấm ghi'), ...liveToRows(overridden, 'Giữ override')]);
     btnUpdate.hidden = false;
     liveDiscard.hidden = false;
     setStatus('Bấm Cập nhật để áp dụng lượt sửa.');
+  }
+
+  function liveRenderDone(preview, changed) {
+    if (readOnly || !preview) return;
+    const { changes = [], blocked = [], overridden = [] } = preview;
+    const summary = {
+      title: 'Đã cập nhật ' + changed + ' layer trên ' + changes.length + ' màn',
+      badge: '✓ Xong',
+      desc: blocked.length || overridden.length
+        ? [blocked.length ? blocked.length + ' cấm ghi' : '', overridden.length ? overridden.length + ' giữ override' : ''].filter(Boolean).join(' · ')
+        : '',
+    };
+    renderRows([summary, ...liveToRows(changes, '✓'), ...liveToRows(blocked, 'Cấm ghi')]);
   }
 
   async function liveRun(job) {
@@ -192,6 +220,7 @@
 
   async function liveApply() {
     const id = liveBatch.id;
+    const preview = liveBatch.preview;
     liveBusy = true;
     btnUpdate.disabled = true;
     try {
@@ -203,15 +232,19 @@
         output = { error: err.message };
       }
       await livePost('batch/finish', { id, ...output });
-      setStatus(output.error || 'Đã cập nhật ' + output.result.changed + ' layer.', output.error ? 'err' : 'ok');
+      if (output.error) {
+        setStatus(output.error, 'err');
+      } else {
+        liveRenderDone(preview, output.result.changed);
+        setStatus('Đã cập nhật ' + output.result.changed + ' layer.', 'ok');
+      }
     } catch (err) {
       setStatus(err.message, 'err');
     } finally {
       liveBatch = null;
       liveBusy = false;
       liveDiscard.hidden = true;
-      if (cachedCat && cachedCat.hasBuilder !== false) renderPlan(cachedCat);
-      else btnUpdate.hidden = true;
+      btnUpdate.hidden = true;
       btnUpdate.disabled = false;
     }
   }
