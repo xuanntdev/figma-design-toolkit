@@ -13,19 +13,20 @@ function lintRawPaints(node, key, styleKey) {
   const style = lintGet(node, styleKey);
   const paints = lintGet(node, key);
   if ((typeof style === 'string' && style) || !Array.isArray(paints)) return [];
-  return paints.filter((p) => p.visible !== false && p.type === 'SOLID' && !(p.boundVariables && p.boundVariables.color))
+  return paints.filter((p) => p.visible !== false && p.opacity !== 0 && p.type === 'SOLID' && !(p.boundVariables && p.boundVariables.color))
     .map((p) => lkColorKey(toHex(p.color), p.opacity));
 }
 
 function lintVisible(list) {
-  return Array.isArray(list) && list.some((x) => x.visible !== false);
+  return Array.isArray(list) && list.some((x) => x.visible !== false && x.opacity !== 0);
 }
 
-// Khung/nhóm chỉ bọc đúng một con, không có nền/viền/bóng/padding: gộp được vào con hoặc cha.
+// Khung/nhóm chỉ bọc đúng một con cùng kích thước, không có nền/viền/bóng/padding: không thêm gì, gộp được vào con hoặc cha.
+// Khung khác kích thước con (ví dụ khung icon 20×20 chứa vector 15×15) là có chủ đích, không báo.
 function lintWrapper(node) {
   if (!['FRAME', 'GROUP'].includes(node.type) || ['PAGE', 'SECTION'].includes(node.parent && node.parent.type)) return false;
   const kids = (node.children || []).filter((k) => k.visible !== false);
-  if (kids.length !== 1) return false;
+  if (kids.length !== 1 || Math.abs(kids[0].width - node.width) > 0.5 || Math.abs(kids[0].height - node.height) > 0.5) return false;
   if (lintVisible(lintGet(node, 'fills')) || lintVisible(lintGet(node, 'strokes')) || lintVisible(lintGet(node, 'effects'))) return false;
   return !['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft'].some((k) => lintGet(node, k));
 }

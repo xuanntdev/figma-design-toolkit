@@ -25,8 +25,10 @@ function screen(page) {
   card.fills = [solid(1, 1, 1)];
   node('TEXT', { name: 'Nhãn', characters: 'Số hợp đồng', fontName: { family: 'Inter', style: 'Medium' }, fontSize: 13, lineHeight: { unit: 'PIXELS', value: 20 }, fills: [solid(0.2, 0.2, 0.2)], textAlignHorizontal: 'CENTER' }, card);
   node('TEXT', { name: 'Có style', characters: 'Khảo sát', textStyleId: 'S:body', fills: [{ ...solid(0, 0, 0), boundVariables: { color: { id: 'V1' } } }] }, card);
-  const wrap = node('FRAME', { name: 'Bọc', fills: [] }, card);
+  const wrap = node('FRAME', { name: 'Bọc', fills: [{ ...solid(1, 1, 1), opacity: 0 }] }, card);
   node('RECTANGLE', { name: 'Lõi', fills: [], strokes: [solid(1, 0, 0)], strokeWeight: 1 }, wrap);
+  const icon = node('FRAME', { name: 'Khung icon', width: 20, height: 20 }, card);
+  node('VECTOR', { name: 'Vector', width: 15, height: 15, fills: [] }, icon);
   node('FRAME', { name: 'Đã detach', detachedInfo: { type: 'local', componentId: 'C:1' }, fillStyleId: 'S:bg' }, card);
   const main = node('COMPONENT', { name: 'Nút Lưu' }, page);
   const inst = node('INSTANCE', { name: 'Lưu', componentProperties: {}, fills: [solid(0, 0.6, 0.4)] }, card);
@@ -51,7 +53,7 @@ async function checkLint(env, s) {
   assert.deepEqual(lint.counts, { 'raw-fill': 2, 'raw-stroke': 1, 'no-text-style': 1, detached: 1, wrapper: 1 }, JSON.stringify(lint.counts));
   const ids = (rule) => lint.issues.filter((i) => i.rule === rule).map((i) => i.n);
   assert.deepEqual(ids('raw-fill').sort(), ['Chi tiết', 'Nhãn'], 'màu đã gắn style/biến và ruột instance không bị báo');
-  assert.deepEqual(ids('wrapper'), ['Bọc']);
+  assert.deepEqual(ids('wrapper'), ['Bọc'], 'khung icon khác kích thước con không phải khung thừa; fill trong suốt không tính màu thô');
   assert.deepEqual(ids('detached'), ['Đã detach']);
   assert.ok(lint.colors.some((c) => c.hex === '#ffffff'), JSON.stringify(lint.colors));
   const only = plain(await env.ok('liveLint', { within: s.frame.id, rules: ['wrapper'], limit: 5 }));
