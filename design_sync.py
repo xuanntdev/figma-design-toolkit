@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from kit_core import bridge, bridge_client, build, config, figma_diff, figma_diff_render, live_bridge, live_client, manifest
+from kit_core import bridge, bridge_client, build, config, figma_diff, figma_diff_render, live_bridge, live_client, live_view, manifest
 
 BASE = Path(__file__).resolve().parent
 
@@ -162,7 +162,8 @@ def cmd_serve(args: argparse.Namespace) -> None:
 
 def cmd_pull(args: argparse.Namespace) -> None:
     if has_project(args):
-        summary = client(args).request("state", {}, args.timeout)["result"]
+        limits = {k: v for k, v in (("maxNodes", args.max_nodes), ("depth", args.depth)) if v is not None}
+        summary = client(args).request("state", limits, args.timeout)["result"]
     else:
         summary = bridge_client.pull(bridge_port(args, required=True), Path(__file__).resolve(), state_dir(args),
                                      timeout=args.timeout, project_dir=args.project_dir)
@@ -222,9 +223,19 @@ def cmd_live(args):
         payload["variableId"] = payload.pop("nodeId")
     if command == "protect":
         payload.update(pageId=args.page_id, blocked=args.mode == "block")
+    if command == "find":
+        payload.update({k: v for k, v in (("query", args.query), ("types", args.type), ("component", args.component),
+                                           ("within", args.within), ("pageId", args.page_id), ("limit", args.limit)) if v})
+    if command == "lint":
+        payload.update({k: v for k, v in (("within", args.within), ("pageId", args.page_id), ("rules", args.rule), ("limit", args.limit)) if v})
+    for key, attr in (("depth", "depth"), ("maxNodes", "max_nodes")):
+        if getattr(args, attr, None) is not None:
+            payload[key] = getattr(args, attr)
     connection = client(args)
     result = connection.status() if command == "status" else connection.request(command, payload, args.timeout)
-    print_json(result)
+    if getattr(args, "json", False) or command not in {"tree", "selection", "find", "lint"}:
+        return print_json(result)
+    print(live_view.render(command, result, getattr(args, "lines", 0), live_view.cache_dir(state_dir(args))))
 
 
 def write_export_png(response: dict, destination: Path) -> None:
@@ -298,6 +309,8 @@ def parser() -> argparse.ArgumentParser:
     pull_cmd.add_argument("--port", type=int, default=None, help="Cổng cầu nối (mặc định bridge.port).")
     pull_cmd.add_argument("--timeout", type=float, default=60, help="Số giây chờ plugin trả lời (mặc định 60).")
     pull_cmd.add_argument("--state-dir", type=Path, default=None, help="Thư mục ghi trạng thái nếu pull phải tự bật cầu nối.")
+    pull_cmd.add_argument("--max-nodes", type=int, default=None, help="Số node tối đa mỗi màn (mặc định 800).")
+    pull_cmd.add_argument("--depth", type=int, default=None, help="Độ sâu tối đa mỗi màn (mặc định 16).")
     pull_cmd.set_defaults(handler=cmd_pull)
 
     doctor_cmd = commands.add_parser("doctor", help="Kiểm manifest, bridge và file Figma đã ghép.")
@@ -320,9 +333,30 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+def add_read_options(command, name):
+    if name in {"tree", "selection", "find", "lint"}:
+        command.add_argument("--json", action="store_true", help="In JSON thô thay vì bản gọn.")
+    if name in {"tree", "selection"}:
+        command.add_argument("--lines", type=int, default=300 if name == "tree" else 120, help="Trần số dòng dàn ý; cấp sâu hơn thu gọn kèm id.")
+        command.add_argument("--depth", type=int, default=None, help="Độ sâu đọc (tree mặc định 8, selection 2).")
+    if name == "tree":
+        command.add_argument("--max-nodes", type=int, default=None, help="Số node tối đa (mặc định 800).")
+    if name in {"find", "lint"}:
+        command.add_argument("--within", help="Chỉ trong node này (id).")
+        command.add_argument("--page-id", help="Chỉ trong page này (id).")
+        command.add_argument("--limit", type=int, default=None, help="Số dòng kết quả tối đa (find 50, lint 100).")
+    if name == "find":
+        command.add_argument("query", nargs="?", default=None, help="Chuỗi khớp tên layer hoặc nội dung chữ (không phân biệt dấu, hoa thường).")
+        command.add_argument("--type", action="append", help="Lọc loại node, lặp lại được: TEXT, FRAME, INSTANCE…")
+        command.add_argument("--component", help="Chỉ instance của component/set có tên khớp.")
+    if name == "lint":
+        command.add_argument("--rule", action="append", choices=("raw-fill", "raw-stroke", "no-text-style", "detached", "wrapper"), help="Chỉ rà luật này (lặp lại được).")
+
+
 def add_live_commands(commands):
     descriptions = {
-        "selection": "Đọc selection trực tiếp từ Figma.", "tree": "Đọc cây layer theo ID.",
+        "selection": "Đọc selection trực tiếp từ Figma (dàn ý gọn).", "tree": "Đọc dàn ý thông số của một node theo ID.",
+        "find": "Tìm node theo tên/chữ/loại/component trên Figma.", "lint": "Rà màu thô, chữ chưa có text style, instance detach, khung bọc thừa.",
         "impact": "Xem các màn kế thừa từ component.", "status": "Xem kết nối và lượt chờ Cập nhật.",
         "export-png": "Xuất PNG của một frame hoặc layer từ file đang ghép.",
         "edit": "Sửa trực tiếp một màn theo JSON.", "create": "Tạo màn chỉnh sửa được theo JSON.",
@@ -338,6 +372,7 @@ def add_live_commands(commands):
             command.add_argument("input_file", type=Path)
         if name in {"tree", "impact"}:
             command.add_argument("node_id")
+        add_read_options(command, name)
         if name == "export-png":
             command.add_argument("node_id", nargs="?")
             command.add_argument("--out", type=Path, required=True)

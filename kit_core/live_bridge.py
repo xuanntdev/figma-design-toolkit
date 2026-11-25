@@ -10,7 +10,10 @@ from threading import RLock
 KEY_FILE = ".bridge-key"
 # Chromium can reduce background popup timers to one tick per minute.
 LEASE = 90
-COMMANDS = {"state", "selection", "tree", "impact", "exportPng", "edit", "create", "protect", "stage"}
+JOB_TTL = 600
+# Lệnh đang chạy (đọc trọn file lớn có thể lâu) giữ lâu hơn lệnh chờ/đã xong.
+RUNNING_TTL = 6 * 3600
+COMMANDS = {"state", "selection", "tree", "find", "lint", "impact", "exportPng", "edit", "create", "protect", "stage"}
 
 
 class SessionChanged(ValueError):
@@ -130,7 +133,7 @@ class LiveSession:
 
     def dispatch(self, method, tail, body):
         moment = time.monotonic()
-        self.jobs = {rid: job for rid, job in self.jobs.items() if moment - job["created"] < 600}
+        self.jobs = {rid: job for rid, job in self.jobs.items() if moment - job["created"] < (RUNNING_TTL if job["state"] == "running" else JOB_TTL)}
         if method == "get" and tail == ["status"]:
             return self.status()
         if method == "get" and len(tail) == 2 and tail[0] == "result":

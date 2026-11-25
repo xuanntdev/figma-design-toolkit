@@ -17,11 +17,20 @@ Cùng popup dùng cho thao tác theo selection, lô chờ **Cập nhật** và b
 ```sh
 python design_sync.py pull
 python design_sync.py selection
+python design_sync.py find "số hợp đồng" --type TEXT
 python design_sync.py tree "12:34" --session "<session>"
+python design_sync.py lint --within "12:34"
 python design_sync.py impact "12:34" --session "<session>"
 ```
 
-`pull` đưa canvas Figma vào `project/figma-state`. Dùng `index.json` tìm page và màn, `screens/` đọc cây, `components.json` tìm ID component/variant và `tokens.json` tìm ID biến/style. `documentSession` cho biết phiên đã đọc. Khi mở file hoặc phiên khác, kéo lại trước khi dùng các ID này. Định dạng có thể giới hạn độ sâu và số layer, dùng `tree` cho phần cần chi tiết.
+`pull` đưa canvas Figma vào `project/figma-state`. Dùng `index.json` tìm page và màn, `screens/` đọc cây, `components.json` tìm ID component/variant và `tokens.json` tìm ID biến/style. `documentSession` cho biết phiên đã đọc. Khi mở file hoặc phiên khác, kéo lại trước khi dùng các ID này. Bản kéo giới hạn mỗi màn 800 layer và 16 cấp; đặt `pull --max-nodes N --depth D` khi cần sâu hơn.
+
+`find`, `tree`, `selection` và `lint` đọc trực tiếp file đang mở, còn `figma-state` là bản chụp tại lần `pull` (`readAt`).
+
+- `find [chuỗi] [--type T] [--component C] [--within ID] [--page-id ID] [--limit N]`: tìm theo tên layer hoặc nội dung chữ (không phân biệt dấu, hoa thường), loại node hoặc component; in danh sách gọn kèm ID, đường dẫn và tổng số kết quả.
+- `tree <id>` và `selection`: in dàn ý mỗi node một dòng (rộng×cao fill|hug|px, flex row|col, gap, pad, căn trục, nền, viền, bo góc, bóng, chữ, style/biến, component + variant). Cây vượt `--lines` thì cấp sâu được thu gọn kèm ID để đọc tiếp; JSON của lần đọc được ghi ra tệp tạm (đường dẫn in ở đầu). `tree` mặc định sâu 8 cấp, 800 layer (`--depth`, `--max-nodes`).
+- `lint [--within ID] [--page-id ID] [--rule R] [--limit N]`: rà màu thô chưa gắn biến/style (`raw-fill`, `raw-stroke`), chữ chưa có text style (`no-text-style`), instance đã detach (`detached`), khung chỉ bọc một con (`wrapper`); mặc định page đang mở, bỏ qua instance. Dùng kết quả để sửa hàng loạt bằng `stage`.
+- Thêm `--json` để in JSON thô.
 
 ## Xuất ảnh từ canvas Figma
 
@@ -60,7 +69,9 @@ python design_sync.py protect unblock "1:2" --session "<session>"
 
 Thay đổi hỗ trợ tên, chữ một font, font, bố cục, kích thước, fill/stroke, style ID, property của instance và binding biến. `componentProperties` dùng đúng khóa property đầy đủ từ cây layer. `fills` và `strokes` nhận danh sách `{"color":"#RRGGBB","opacity":1}` hoặc `{"variableId":"VariableID:1:7"}`. `bindings` nhận cặp trường và variable ID hoặc null. Dùng `expect` để buộc thuộc tính còn đúng giá trị đã đọc.
 
-`edit` ghi ngay khi toàn bộ thay đổi nằm trong một màn. `stage` dùng cùng schema cho sửa hàng loạt. Nó hiện các màn, layer và đích bị cấm, rồi chờ nút **Cập nhật** trong plugin. Nếu đích, giá trị hoặc quyền đã đổi từ lúc xem, chuẩn bị lại lượt cập nhật. `status` trả trạng thái lượt.
+`edit` ghi ngay khi toàn bộ thay đổi nằm trong một màn (tối đa 500 layer). `stage` dùng cùng schema cho sửa hàng loạt (tối đa 10.000 layer mỗi lượt).
+
+Để gộp khối vẽ tay về component chung, dùng mục `{"nodeId":"12:40","replace":{"componentId":"3:5","properties":{"Label":"Lưu"}}}` thay cho `set`: instance của biến thể `componentId` được chèn đúng vị trí trong cha, giữ cách co giãn theo auto layout (và kích thước khi cố định, `keepSize: false` để dùng cỡ component), đặt property theo tên gốc, giữ tên layer; layer cũ bị xoá. Chỉ thay layer không nằm trong component/instance. Nó hiện các màn, layer và đích bị cấm, rồi chờ nút **Cập nhật** trong plugin. Nếu đích, giá trị hoặc quyền đã đổi từ lúc xem, chuẩn bị lại lượt cập nhật. `status` trả trạng thái lượt.
 
 Khi sửa component gốc, danh sách hiện từng instance theo màn. **Kế thừa** liệt kê thuộc tính nhận thay đổi. **Giữ override** liệt kê thuộc tính đang có giá trị riêng trên đúng layer. Một instance có thể xuất hiện với cả hai nhãn nếu sửa nhiều thuộc tính. **Cần kiểm tra** xuất hiện khi plugin chưa xác định được thuộc tính có kế thừa hay không, ví dụ chữ đi qua component property. `impact <node-id>` liệt kê các instance và override của layer đã chọn để đọc trước khi lập lô.
 

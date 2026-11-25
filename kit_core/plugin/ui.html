@@ -149,15 +149,26 @@
       st.textContent = text;
     }
 
-    function callMain(name, args) {
+    // timeoutMs: quá hạn thì nhả lệnh (giảm inflight, bỏ kết quả đến muộn) để cửa sổ không kẹt mãi vì một lệnh treo.
+    function callMain(name, args, timeoutMs) {
       seq += 1;
       const id = 'ui-' + seq;
       inflight += 1;
       return new Promise((resolve, reject) => {
+        let timer = null;
         waiters[id] = (res) => {
+          if (timer) clearTimeout(timer);
           inflight -= 1;
           return res.ok ? resolve(res.value) : reject(new Error(res.error || 'Lỗi không xác định'));
         };
+        if (timeoutMs) {
+          timer = setTimeout(() => {
+            if (!waiters[id]) return;
+            delete waiters[id];
+            inflight -= 1;
+            reject(new Error('Plugin không trả lời lệnh ' + name + ' sau ' + Math.round(timeoutMs / 1000) + ' giây.'));
+          }, timeoutMs);
+        }
         parent.postMessage({ pluginMessage: { type: 'PLUGIN_CMD', cmd: { id, name, args: args || {} } } }, '*');
       });
     }

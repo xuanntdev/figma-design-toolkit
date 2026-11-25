@@ -101,9 +101,41 @@ def verify_reads(cli, project, port, send, data):
         output, error = process.communicate(timeout=7)
         assert process.returncode == 0, error.decode("utf-8", errors="replace")
         if request == "selection":
-            assert json.loads(output)["session"] == data["session"]
+            text = output.decode("utf-8")
+            assert data["session"] in text and "selection trống" in text, text
     snapshot = json.loads((project / "figma-state/index.json").read_text(encoding="utf-8"))
     assert snapshot["documentSession"] == data["session"]
+    verify_compact_reads(cli, port, send, data)
+
+
+def verify_compact_reads(cli, port, send, data):
+    """tree / find / lint in bản gọn; tham số CLI tới plugin đúng; --json vẫn in JSON thô."""
+    tree = {"id": "1:2", "t": "FRAME", "n": "Màn", "w": 100, "h": 50, "lm": "V", "gap": 8, "c": [{"id": "1:3", "t": "TEXT", "n": "Tiêu đề", "chars": "Xin chào", "font": "Inter Bold", "size": 16, "w": 60, "h": 20}]}
+    found = {"total": 3, "shown": 1, "hits": [{"id": "1:3", "t": "TEXT", "n": "Tiêu đề", "w": 60, "h": 20, "page": "P", "path": "Màn", "text": "Xin chào"}]}
+    linted = {"scope": {"id": "1:2", "name": "Màn", "t": "FRAME"}, "counts": {"raw-fill": 2}, "colors": [{"hex": "#ffffff", "n": 2}], "shown": 1,
+              "issues": [{"rule": "raw-fill", "id": "1:2", "t": "FRAME", "n": "Màn", "value": "#ffffff", "path": ""}]}
+    cases = (
+        (["tree", "1:2", "--depth", "20"], "tree", {"node": {"nodeId": "1:2", "frameId": "1:2", "screen": "Màn", "page": "P", "tree": tree}},
+         {"nodeId": "1:2", "depth": 20}, ['text "Tiêu đề" #1:3', "flex col · gap 8", "JSON của lần đọc này:"]),
+        (["find", "chao", "--type", "TEXT", "--limit", "1"], "find", found, {"query": "chao", "types": ["TEXT"], "limit": 1},
+         ["3 kết quả, in 1", '#1:3 TEXT "Tiêu đề"', "còn kết quả"]),
+        (["lint", "--within", "1:2", "--rule", "raw-fill"], "lint", linted, {"within": "1:2", "rules": ["raw-fill"]},
+         ["raw-fill 2", "#ffffff×2", 'raw-fill · #1:2 FRAME "Màn"', "in 1/2"]),
+        (["find", "x", "--json"], "find", found, {"query": "x"}, ['"total": 3']),
+    )
+    for args, request, result, expect_args, expect in cases:
+        process = subprocess.Popen([*cli, *args, "--port", str(port), "--timeout", "5"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for _ in range(100):
+            job = send("POST", "poll", data)["job"]
+            if job:
+                assert job["command"] == request and job["args"] == expect_args, job
+                send("POST", "result/" + job["id"], {**data, "result": result})
+                break
+            time.sleep(0.025)
+        output, error = process.communicate(timeout=7)
+        assert process.returncode == 0, error.decode("utf-8", errors="replace")
+        text = output.decode("utf-8")
+        assert all(e in text for e in expect), text
 
 
 def verify_batch(send, data):

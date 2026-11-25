@@ -9,7 +9,9 @@ async function rsContext(maxNodes) {
   const vars = new Map();
   const styles = new Map();
   if (rsHasVariables()) (await figma.variables.getLocalVariablesAsync()).forEach((v) => vars.set(v.id, v.name));
-  if (figma.getLocalTextStylesAsync) (await figma.getLocalTextStylesAsync()).forEach((s) => styles.set(s.id, s.name));
+  for (const fn of ['getLocalTextStylesAsync', 'getLocalPaintStylesAsync', 'getLocalEffectStylesAsync']) {
+    if (typeof figma[fn] === 'function') (await figma[fn]()).forEach((s) => styles.set(s.id, s.name));
+  }
   return { vars, styles, names: new Map(), budget: { left: maxNodes } };
 }
 

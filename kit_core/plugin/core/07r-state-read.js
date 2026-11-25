@@ -94,7 +94,7 @@ function rsKey(row, used) {
   return key;
 }
 
-async function rsScreens(ctx, maxNodes) {
+async function rsScreens(ctx, maxNodes, depth) {
   const pages = [];
   const rows = [];
   const files = {};
@@ -107,7 +107,7 @@ async function rsScreens(ctx, maxNodes) {
       row.key = rsKey(row, used);
       row.file = 'screens/' + row.key + '.json';
       ctx.budget.left = maxNodes;
-      files[row.file] = { key: row.key, screenId: row.screenId, id: row.id, name: row.name, status: row.status, tree: await rsNode(frame, ctx, RS_MAX_DEPTH) };
+      files[row.file] = { key: row.key, screenId: row.screenId, id: row.id, name: row.name, status: row.status, tree: await rsNode(frame, ctx, depth) };
       rows.push(row);
       const sec = acc.sections.find((s) => s.path === row.section);
       if (sec) sec.screens += 1;
@@ -128,11 +128,12 @@ function rsCounts(rows) {
   };
 }
 
-// args: { requestId?, maxNodes? }. Trả payload gửi qua cầu nối hoặc tải thành tệp.
+// args: { requestId?, maxNodes?, depth? }. Mặc định mỗi màn tối đa RS_MAX_NODES node, sâu RS_MAX_DEPTH cấp; truyền số lớn hơn để đọc sâu hơn.
 async function cmdReadState(args) {
   await figma.loadAllPagesAsync();
   const ctx = await rsContext(RS_MAX_NODES);
-  const screens = await rsScreens(ctx, (args && args.maxNodes) || RS_MAX_NODES);
+  const limit = (key, fallback) => (args && Number.isInteger(args[key]) && args[key] > 0 ? args[key] : fallback);
+  const screens = await rsScreens(ctx, limit('maxNodes', RS_MAX_NODES), limit('depth', RS_MAX_DEPTH));
   const tokens = await rsTokens(ctx);
   const components = await rsComponents(ctx);
   const index = {
