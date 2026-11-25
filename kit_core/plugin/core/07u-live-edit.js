@@ -1,4 +1,7 @@
 let LIVE_STAGED = null;
+const LIVE_EDIT_MAX = 500;
+// Lượt stage (xem trước rồi bấm Cập nhật) cho phép nhiều layer hơn: gắn token / gộp component cả trang.
+const LIVE_STAGE_MAX = 10000;
 
 function liveCheckExpected(edit, steps) {
   if (edit.expect == null) return;
@@ -16,7 +19,8 @@ async function liveEditRow(edit, protectedPages) {
   if (!livePage(node) || node.type === 'PAGE') throw new Error('Đích sửa phải là layer trên canvas.');
   const scope = liveScope(node);
   const blocked = protectedPages.has(scope.pageId);
-  const steps = blocked ? [] : await liveSteps(node, edit.set);
+  if (edit.replace && edit.set) throw new Error('Mục sửa chỉ dùng một trong replace hoặc set: ' + edit.nodeId);
+  const steps = blocked ? [] : edit.replace ? [await liveReplaceStep(node, edit.replace)] : await liveSteps(node, edit.set);
   if (!blocked) liveCheckExpected(edit, steps);
   return { node, scope, blocked, steps };
 }
@@ -68,11 +72,12 @@ function liveSummarizeEdits(rows, instances, inherited) {
   return { changes, blocked, overridden };
 }
 
-async function livePlanEdits(args) {
+async function livePlanEdits(args, max) {
   const edits = args.edits;
+  const limit = max || LIVE_EDIT_MAX;
   const keyOf = (edit) => edit?.nodeId || (edit?.variableId && edit.variableId + '/' + edit.modeId);
-  if (!Array.isArray(edits) || !edits.length || edits.length > 500 || new Set(edits.map(keyOf)).size !== edits.length) {
-    throw new Error('Cần 1–500 layer đích khác nhau.');
+  if (!Array.isArray(edits) || !edits.length || edits.length > limit || new Set(edits.map(keyOf)).size !== edits.length) {
+    throw new Error('Cần 1–' + limit + ' layer đích khác nhau.');
   }
   const protectedPages = liveProtected();
   const rows = [];
@@ -93,7 +98,7 @@ async function livePlanEdits(args) {
 }
 
 function liveRememberEdits(rows, rollback) {
-  for (const frame of new Set(rows.flatMap(({ node }) => node ? [liveScreen(node)] : []))) {
+  for (const frame of new Set(rows.flatMap(({ node }) => (node && !node.removed ? [liveScreen(node)] : [])))) {
     if (stTagOf(frame, 'source') !== 'ai') continue;
     const edited = stTagOf(frame, 'edited');
     rollback.push(() => stTag(frame, { source: 'ai', edited }));
@@ -150,7 +155,7 @@ async function liveEdit(args) {
 }
 
 async function liveStage(args) {
-  const plan = await livePlanEdits(args);
+  const plan = await livePlanEdits(args, LIVE_STAGE_MAX);
   LIVE_STAGED = plan.preview.changes.length ? { jobId: args.jobId, edits: args.edits, fingerprint: plan.fingerprint } : null;
   return plan.preview;
 }
@@ -159,7 +164,7 @@ async function liveApply(args) {
   const staged = LIVE_STAGED;
   if (!staged || staged.jobId !== args.jobId) throw new Error('Lượt cập nhật đã đổi. Chuẩn bị lại danh sách.');
   LIVE_STAGED = null;
-  const plan = await livePlanEdits(staged);
+  const plan = await livePlanEdits(staged, LIVE_STAGE_MAX);
   if (plan.fingerprint !== staged.fingerprint) throw new Error('Đích, dữ liệu hoặc quyền ghi đã đổi. Chuẩn bị lại danh sách.');
   return liveWriteEdits(plan);
 }
