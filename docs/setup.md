@@ -98,7 +98,8 @@ Sửa file rồi chạy lại `build` là đủ. Cờ `build --name/--id/--exten
 | `python design_sync.py build` | Dựng plugin offline cho `project/` ra `project/dist/`. |
 | `python design_sync.py check` | Kiểm giới hạn mã sạch (≤ 300 dòng/file, ≤ 40 dòng/hàm) của `project/extension/` và cú pháp `project/dist/code.js`. |
 | `python design_sync.py serve [--port] [--state-dir] [--idle-exit phút]` | Chạy cầu nối (chỉ `127.0.0.1`), nhận trạng thái Figma từ plugin vào `project/figma-state/`. Cổng mặc định lấy từ `bridge.port`. |
-| `python design_sync.py pull [--timeout 60]` | Xin plugin (đang mở trong Figma Desktop) đọc file Figma và chờ trạng thái về `project/figma-state/`; tự bật cầu nối nền nếu chưa chạy. Thoát khác 0 khi plugin không trả lời hoặc dự án đã tắt bridge. |
+| `python design_sync.py pull [--timeout 60] [--max-nodes N] [--depth D]` | Xin plugin (đang mở trong Figma Desktop) đọc file Figma (mặc định mỗi màn 800 layer, 16 cấp) và chờ trạng thái về `project/figma-state/`; tự bật cầu nối nền nếu chưa chạy. Thoát khác 0 khi plugin không trả lời hoặc dự án đã tắt bridge. |
+| `python design_sync.py find [chuỗi] [--type T] [--component C]` / `lint [--within ID]` | Tìm node / rà màu thô, chữ chưa có style, instance detach, khung bọc thừa trực tiếp trên file đang ghép. Xem [figma-live.md](figma-live.md). |
 | `python design_sync.py export-png [nodeId] --out <ảnh.png>` | Xuất ảnh một frame qua cùng plugin. Bỏ ID để dùng selection đơn đang có. |
 | `python design_sync.py import-state <tệp>` | Nạp snapshot JSON có sẵn vào `project/figma-state/`. |
 | `python design_sync.py figma-diff [--json] [--base <thư mục>] [--no-git]` | So `project/figma-state/` với bản chốt trước (git HEAD) và nguồn repo; in báo cáo từng màn. Xem [workflow.md](workflow.md) mục 6. |

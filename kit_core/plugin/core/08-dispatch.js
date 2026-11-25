@@ -1,7 +1,7 @@
 // Bộ điều phối thông điệp cục bộ giữa ui.html và code.js (không kết nối mạng).
 
 async function runPluginCommand(cmd) {
-  if (stConfig().readOnly && !['readState', 'liveFile', 'liveSelection', 'liveTree', 'liveImpact', 'exportPng'].includes(cmd?.name)) {
+  if (stConfig().readOnly && !['readState', 'liveFile', 'liveSelection', 'liveTree', 'liveFind', 'liveLint', 'liveImpact', 'exportPng'].includes(cmd?.name)) {
     return { id: cmd?.id, ok: false, error: 'Chế độ kiểm kê chỉ đọc trạng thái Figma.' };
   }
   const fn = Object.hasOwn(PLUGIN_COMMANDS, cmd?.name) && PLUGIN_COMMANDS[cmd.name];

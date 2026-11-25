@@ -34,7 +34,7 @@
   async function bridgeSend(requestId) {
     let payload;
     try {
-      payload = await callMain('readState', { requestId });
+      payload = await callMain('readState', { requestId }, 3600000);
     } catch (err) {
       return bridgeCall('POST', '/state', { kind: 'figma-state', requestId, error: err.message });
     }

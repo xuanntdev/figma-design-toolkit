@@ -59,21 +59,23 @@ async function liveDescribe(node, depth, ctx) {
   return { ...liveScope(node), nodeId: node.id, tree: await rsNode(node, ctx, depth) };
 }
 
-async function liveSelection() {
+async function liveSelection(args) {
   const nodes = [...(figma.currentPage.selection || [])];
+  const depth = args && Number.isInteger(args.depth) ? Math.max(0, args.depth) : 2;
   const ctx = await rsContext(350);
   return {
     ...liveFile(), readAt: new Date().toISOString(), page: figma.currentPage.name,
     protectedPages: [...liveProtected()],
-    selection: await Promise.all(nodes.map((n) => liveDescribe(n, 2, ctx))),
+    selection: await Promise.all(nodes.map((n) => liveDescribe(n, depth, ctx))),
   };
 }
 
 async function liveTree(args) {
   const node = await liveNode(args.nodeId);
   if (!livePage(node)) throw new Error('Chọn một node bên trong canvas.');
-  const depth = Number.isInteger(args.depth) ? Math.max(0, Math.min(16, args.depth)) : 8;
-  const ctx = await rsContext(800);
+  // Mặc định sâu 8 cấp, tối đa 800 node; truyền depth / maxNodes để đọc sâu hơn.
+  const depth = Number.isInteger(args.depth) ? Math.max(0, args.depth) : 8;
+  const ctx = await rsContext(Number.isInteger(args.maxNodes) && args.maxNodes > 0 ? args.maxNodes : 800);
   return { ...liveFile(), readAt: new Date().toISOString(), node: await liveDescribe(node, depth, ctx) };
 }
 

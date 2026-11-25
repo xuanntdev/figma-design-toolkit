@@ -2,8 +2,11 @@
   const LIVE_URL = 'http://localhost:__BRIDGE_PORT__/live/';
   const LIVE_KEY = '__BRIDGE_KEY__';
   const LIVE_RECONNECT_DELAY = 2500;
+  // Lệnh treo không giữ cả phiên: quá hạn thì báo lỗi rồi nhận lệnh tiếp. Đọc trọn file được lâu hơn.
+  const LIVE_TIMEOUT = 120000;
+  const LIVE_STATE_TIMEOUT = 3600000;
   const liveCommands = Object.freeze({
-    state: 'readState', selection: 'liveSelection', tree: 'liveTree', exportPng: 'exportPng',
+    state: 'readState', selection: 'liveSelection', tree: 'liveTree', find: 'liveFind', lint: 'liveLint', exportPng: 'exportPng',
     impact: 'liveImpact', edit: 'liveEdit', create: 'liveCreate',
     protect: 'liveProtect', stage: 'liveStage',
   });
@@ -109,7 +112,8 @@
     let output;
     try {
       if (!Object.hasOwn(liveCommands, job.command)) throw new Error('Lệnh cầu nối không được hỗ trợ.');
-      output = { result: await callMain(liveCommands[job.command], { ...job.args, jobId: job.id }) };
+      const wait = job.command === 'state' ? LIVE_STATE_TIMEOUT : LIVE_TIMEOUT;
+      output = { result: await callMain(liveCommands[job.command], { ...job.args, jobId: job.id }, wait) };
     } catch (err) {
       output = { error: err.message };
     }

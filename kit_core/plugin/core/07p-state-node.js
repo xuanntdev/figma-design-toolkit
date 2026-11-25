@@ -150,6 +150,7 @@ async function rsNode(node, ctx, depth) {
   rsLook(node, ctx, out);
   rsLayout(node, out);
   rsText(node, ctx, out);
+  rsDesign(node, ctx, out);
   if (node.type === 'INSTANCE') {
     await rsInstance(node, ctx, out);
     return out;

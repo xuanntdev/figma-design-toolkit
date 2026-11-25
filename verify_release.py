@@ -255,6 +255,9 @@ def verify_bridge(kit: Path, work: Path) -> None:
     subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-off/code.js")], check=True, env={**os.environ, "STATE_OUT_DIR": str(state_out)})
     subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-on/code.js")], check=True)
     subprocess.run(["node", str(kit / "tests/verify_state.js"), str(work / "state-audit/code.js"), "--read-only"], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_designer.js"), str(work / "state-off/code.js")], check=True)
+    subprocess.run(["node", str(kit / "tests/verify_ui_timeout.js"), str(work / "state-on")], check=True)
+    subprocess.run([sys.executable, "-B", str(kit / "tests/verify_spec.py")], check=True)
     subprocess.run([sys.executable, "-B", str(kit / "tests/verify_bridge.py"), str(state_out)], check=True)
 
 
